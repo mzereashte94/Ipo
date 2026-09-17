@@ -32,7 +32,6 @@ struct HomeApp: Codable, Identifiable {
     }
 }
 
-// مۆدێلێکی تایبەت بۆ بانەرەکان بۆ ئەوەی کۆمپایلەر خێرا بێت
 struct HomeCustomBanner: Identifiable {
     let id = UUID()
     let title: String
@@ -69,7 +68,7 @@ struct HomeView: View {
                 }
                 .padding(.bottom, 40)
             }
-            .searchable(text: $_searchText)
+            .searchable(text: $_searchText, placement: .platform())
             .refreshable {
                 await loadApps()
             }
@@ -95,7 +94,7 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Subviews (پارچە پارچەکراو بۆ ئاسانکاری گیتھەب)
+// MARK: - Subviews
 
 fileprivate struct BannersSection: View {
     let banners: [HomeCustomBanner]
@@ -123,13 +122,10 @@ fileprivate struct BannerCardView: View {
             }
         }) {
             ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: URL(string: banner.image)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    default:
-                        Color.purple.opacity(0.8)
-                    }
+                AsyncImage(url: URL(string: banner.image)) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Color.purple.opacity(0.8)
                 }
                 
                 LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.7)]), startPoint: .top, endPoint: .bottom)
@@ -183,19 +179,15 @@ fileprivate struct AppsListSection: View {
     }
 }
 
-// MARK: - App Row View
 fileprivate struct HomeAppRowView: View {
     let app: HomeApp
     
     var body: some View {
         HStack(spacing: 15) {
-            AsyncImage(url: app.fullImageURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                default:
-                    Color(UIColor.secondarySystemBackground)
-                }
+            AsyncImage(url: app.fullImageURL) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Color(UIColor.secondarySystemBackground)
             }
             .frame(width: 65, height: 65)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -250,7 +242,6 @@ fileprivate struct HomeAppRowView: View {
     }
 }
 
-// MARK: - App Detail View
 fileprivate struct AppDetailView: View {
     let app: HomeApp
     @Environment(\.presentationMode) var presentationMode
@@ -345,13 +336,10 @@ fileprivate struct DetailHeaderImage: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            AsyncImage(url: app.fullImageURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill).blur(radius: 40)
-                default:
-                    Color.purple.opacity(0.6)
-                }
+            AsyncImage(url: app.fullImageURL) { image in
+                image.resizable().aspectRatio(contentMode: .fill).blur(radius: 40)
+            } placeholder: {
+                Color.purple.opacity(0.6)
             }
             .frame(height: 250)
             .clipped()
@@ -378,13 +366,10 @@ fileprivate struct DetailAppInfo: View {
     
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
-            AsyncImage(url: app.fullImageURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                default:
-                    Color(UIColor.secondarySystemBackground)
-                }
+            AsyncImage(url: app.fullImageURL) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Color(UIColor.secondarySystemBackground)
             }
             .frame(width: 100, height: 100)
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -409,7 +394,6 @@ fileprivate struct DetailAppInfo: View {
     }
 }
 
-// MARK: - Info Row Component
 fileprivate struct InfoRow: View {
     let title: String
     let value: String
