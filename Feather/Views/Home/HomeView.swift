@@ -11,13 +11,13 @@ import AltSourceKit
 import Foundation
 import UIKit
 
-// MARK: - Models
-struct AshteSourceResponse: Codable {
+// MARK: - Models (ناوەکانم گۆڕیوە بۆ ئەوەی ئیرۆر نەدات)
+struct AshteHomeAppResponse: Codable {
     let name: String?
-    let apps: [HomeApp]
+    let apps: [AshteHomeAppModel]
 }
 
-struct HomeApp: Codable, Identifiable {
+struct AshteHomeAppModel: Codable, Identifiable {
     var id: Int { idNumber }
     let idNumber: Int
     let name: String
@@ -28,6 +28,14 @@ struct HomeApp: Codable, Identifiable {
     let developerName: String?
     let bundleIdentifier: String?
     let download_url: String
+    
+    var stringID: String {
+        return "\(idNumber)"
+    }
+    
+    var downloadURLObject: URL? {
+        return URL(string: download_url)
+    }
     
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
@@ -41,19 +49,19 @@ struct HomeApp: Codable, Identifiable {
     }
 }
 
-// MARK: - View
+// MARK: - Main View
 struct HomeView: View {
-    @State private var _apps: [HomeApp] = []
-    @State private var _searchText = ""
+    @State private var appsList: [AshteHomeAppModel] = []
+    @State private var searchText = ""
     
-    private var _filteredApps: [HomeApp] {
-        _apps.filter { _searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(_searchText) }
+    private var filteredApps: [AshteHomeAppModel] {
+        appsList.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
     var body: some View {
         NBNavigationView(.localized("Discover")) {
             List {
-                if !_filteredApps.isEmpty {
+                if !filteredApps.isEmpty {
                     Section {
                         Button(action: {
                             if let url = URL(string: "https://t.me/ashtemobile") {
@@ -95,11 +103,11 @@ struct HomeView: View {
                     
                     NBSection(
                         .localized("Applications"),
-                        secondary: _filteredApps.count.description
+                        secondary: filteredApps.count.description
                     ) {
-                        ForEach(_filteredApps) { app in
-                            NavigationLink(destination: AppDetailView(app: app)) {
-                                HomeAppCellView(app: app)
+                        ForEach(filteredApps) { app in
+                            NavigationLink(destination: AshteHomeAppDetailView(app: app)) {
+                                AshteHomeAppCell(app: app)
                                     .padding(.vertical, 4)
                             }
                         }
@@ -107,30 +115,30 @@ struct HomeView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .searchable(text: $_searchText, placement: .platform())
+            .searchable(text: $searchText, placement: .platform())
             .overlay {
-                if _filteredApps.isEmpty {
-                    _emptyStateView()
+                if filteredApps.isEmpty {
+                    AshteHomeEmptyView()
                 }
             }
             .refreshable {
-                await _loadApps()
+                await loadRemoteApps()
             }
         }
         .task {
-            await _loadApps()
+            await loadRemoteApps()
         }
     }
     
-    private func _loadApps() async {
+    private func loadRemoteApps() async {
         guard let url = URL(string: "https://ashtemobile.site/Ashtemobile.json") else { return }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            let decoded = try JSONDecoder().decode(AshteSourceResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(AshteHomeAppResponse.self, from: data)
             DispatchQueue.main.async {
-                self._apps = decoded.apps
+                self.appsList = decoded.apps
             }
         } catch {
             print("Error loading apps: \(error)")
@@ -138,9 +146,9 @@ struct HomeView: View {
     }
 }
 
-extension HomeView {
-    @ViewBuilder
-    private func _emptyStateView() -> some View {
+// MARK: - Subviews (ناوەکان گۆڕاون بۆ ئەوەی لەگەڵ هیچ شتێکدا تێکەڵ نەبن)
+struct AshteHomeEmptyView: View {
+    var body: some View {
         if #available(iOS 17, *) {
             ContentUnavailableView {
                 Label(.localized("No Applications"), systemImage: "square.grid.3x3.slash.fill")
@@ -148,30 +156,16 @@ extension HomeView {
                     .foregroundColor(.purple)
             } description: {
                 Text(.localized("Check your connection or refresh to load apps."))
-            } actions: {
-                Button(action: {
-                    Task { await _loadApps() }
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.clockwise")
-                        Text(.localized("Refresh"))
-                    }
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.purple)
-                    .foregroundColor(.white)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
             }
+        } else {
+            Text("No Applications")
+                .foregroundColor(.secondary)
         }
     }
 }
 
-// MARK: - Home App Cell View
-struct HomeAppCellView: View {
-    let app: HomeApp
+struct AshteHomeAppCell: View {
+    let app: AshteHomeAppModel
     
     var body: some View {
         HStack(spacing: 15) {
@@ -198,7 +192,7 @@ struct HomeAppCellView: View {
             Spacer()
             
             Button(action: {
-                startDownload(app)
+                triggerDownload()
             }) {
                 Text("Get")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -209,23 +203,21 @@ struct HomeAppCellView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.vertical, 4)
     }
     
-    private func startDownload(_ app: HomeApp) {
+    // فەنکشنی فەرمی داونلۆد کە ڕاستەوخۆ دەچێتە Library
+    private func triggerDownload() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
-        guard let downloadURL = URL(string: app.download_url) else { return }
-        
-        // ئێرە کێشەکە بوو کە ڕاستم کردەوە: idـم بۆ زیاد کردووە وەکو سۆرسەکان
-        _ = DownloadManager.shared.startDownload(from: downloadURL, id: String(app.idNumber))
+        if let dlURL = app.downloadURLObject {
+            _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
+        }
     }
 }
 
-// MARK: - App Detail View
-struct AppDetailView: View {
-    let app: HomeApp
+struct AshteHomeAppDetailView: View {
+    let app: AshteHomeAppModel
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -282,7 +274,7 @@ struct AppDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 
-                Button(action: { startDownload(app) }) {
+                Button(action: { triggerDownload() }) {
                     Text("Get")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
@@ -299,10 +291,10 @@ struct AppDetailView: View {
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .padding(.top, 20)
                     
-                    InfoRow(title: "Version", value: app.version ?? "1.0")
-                    InfoRow(title: "Category", value: app.category ?? "Apps")
-                    InfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
-                    InfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile")
+                    AshteHomeInfoRow(title: "Version", value: app.version ?? "1.0")
+                    AshteHomeInfoRow(title: "Category", value: app.category ?? "Apps")
+                    AshteHomeInfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
+                    AshteHomeInfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile")
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
@@ -312,18 +304,17 @@ struct AppDetailView: View {
         .navigationBarHidden(true)
     }
     
-    private func startDownload(_ app: HomeApp) {
+    private func triggerDownload() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
-        guard let downloadURL = URL(string: app.download_url) else { return }
-        
-        // ئێرە کێشەکە بوو کە ڕاستم کردەوە: idـم بۆ زیاد کردووە وەکو سۆرسەکان
-        _ = DownloadManager.shared.startDownload(from: downloadURL, id: String(app.idNumber))
+        if let dlURL = app.downloadURLObject {
+            _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
+        }
     }
 }
 
-struct InfoRow: View {
+struct AshteHomeInfoRow: View {
     let title: String
     let value: String
     
