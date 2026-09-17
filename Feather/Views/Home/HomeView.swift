@@ -29,6 +29,15 @@ struct HomeApp: Codable, Identifiable {
     let bundleIdentifier: String?
     let download_url: String
     
+    // ناسنامە و لینک بۆ DownloadButtonView
+    var currentUniqueId: String {
+        return "\(idNumber)"
+    }
+    
+    var currentDownloadUrl: URL? {
+        return URL(string: download_url)
+    }
+    
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
         case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url
@@ -169,6 +178,7 @@ extension HomeView {
     }
 }
 
+// MARK: - Home App Cell View
 struct HomeAppCellView: View {
     let app: HomeApp
     
@@ -196,31 +206,14 @@ struct HomeAppCellView: View {
             
             Spacer()
             
-            Button(action: {
-                startDownload(app)
-            }) {
-                Text("Get")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .frame(width: 68, height: 30)
-                    .background(Color.purple.opacity(0.12))
-                    .foregroundColor(.purple)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
+            // بەکارهێنانی ڕاستەوخۆی DownloadButtonViewـی پڕۆژەکەت
+            DownloadButtonView(app: app.asRepositoryApp)
         }
         .padding(.vertical, 4)
     }
-    
-    private func startDownload(_ app: HomeApp) {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
-        
-        guard let downloadURL = URL(string: app.download_url) else { return }
-        // 💡 بەکارهێنانی سیستمی فەرمی DownloadManager بۆ داونلۆد و واژووکردن و ناردن بۆ Library
-        _ = DownloadManager.shared.startDownload(from: downloadURL)
-    }
 }
 
+// MARK: - App Detail View
 struct AppDetailView: View {
     let app: HomeApp
     @Environment(\.presentationMode) var presentationMode
@@ -279,17 +272,11 @@ struct AppDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 
-                Button(action: { startDownload(app) }) {
-                    Text("Get")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .frame(width: 110, height: 38)
-                        .background(Color.purple)
-                        .clipShape(Capsule())
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 126)
-                .padding(.top, 5)
+                // بەکارهێنانی DownloadButtonView لە پەڕەی وردەکاریشدا
+                DownloadButtonView(app: app.asRepositoryApp)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 126)
+                    .padding(.top, 5)
                 
                 VStack(alignment: .leading, spacing: 15) {
                     Text("Information")
@@ -308,13 +295,15 @@ struct AppDetailView: View {
         .edgesIgnoringSafeArea(.top)
         .navigationBarHidden(true)
     }
-    
-    private func startDownload(_ app: HomeApp) {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
-        
-        guard let downloadURL = URL(string: app.download_url) else { return }
-        _ = DownloadManager.shared.startDownload(from: downloadURL)
+}
+
+// MARK: - Extension to bridge HomeApp to ASRepository.App
+extension HomeApp {
+    var asRepositoryApp: ASRepository.App {
+        let app = ASRepository.App()
+        app.currentUniqueId = self.currentUniqueId
+        app.currentDownloadUrl = self.currentDownloadUrl
+        return app
     }
 }
 
