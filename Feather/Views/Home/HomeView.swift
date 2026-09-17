@@ -216,7 +216,6 @@ struct HomeAppCellView: View {
         .padding(.vertical, 4)
     }
     
-    // 💡 دەستپێکردنی داونلۆدکردن لەناو خودی ئەپەکەدا بۆ ئەوەی بڕواتە Library
     private func startDownload(_ app: HomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
