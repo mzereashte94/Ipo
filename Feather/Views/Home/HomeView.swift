@@ -11,22 +11,30 @@ import Foundation
 import UIKit
 
 // MARK: - Models
+struct AshteSourceResponse: Codable {
+    let name: String?
+    let apps: [HomeApp]
+}
+
 struct HomeApp: Codable, Identifiable {
-    var id: String { url }
+    var id: Int { idNumber }
+    let idNumber: Int
     let name: String
     let version: String?
     let category: String?
-    let image: String?
+    let iconURL: String?
     let size: String?
-    let developer: String?
-    let bundle: String?
-    let url: String
-    let status: String?
-    let banner: String?
-    let hack: [String]?
+    let developerName: String?
+    let bundleIdentifier: String?
+    let download_url: String
+    
+    enum CodingKeys: String, CodingKey {
+        case idNumber = "id"
+        case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url
+    }
 
     var fullImageURL: URL? {
-        guard let img = image else { return nil }
+        guard let img = iconURL else { return nil }
         if img.hasPrefix("http") { return URL(string: img) }
         return URL(string: "https://ashtemobile.site/\(img)")
     }
@@ -118,16 +126,16 @@ struct HomeView: View {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            let decoded = try JSONDecoder().decode([HomeApp].self, from: data)
+            let decoded = try JSONDecoder().decode(AshteSourceResponse.self, from: data)
             DispatchQueue.main.async {
-                self.apps = decoded
+                self.apps = decoded.apps
             }
         } catch {
             print("Error loading apps: \(error)")
         }
     }
     
-    // MARK: - Nested Views (بۆ ڕێگریکردن لە هەر کێشەیەکی ناوەکان، خرانە ناو خودی HomeView)
+    // MARK: - Nested Views
     
     struct BannerCardView: View {
         let banner: HomeCustomBanner
@@ -206,7 +214,7 @@ struct HomeView: View {
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
             
-            let urlString = app.url
+            let urlString = app.download_url
             let finalURLString: String
             
             if urlString.hasSuffix(".plist") && !urlString.hasPrefix("itms-services") {
@@ -324,10 +332,10 @@ struct HomeView: View {
                             .padding(.bottom, 5)
                         
                         InfoRow(title: "Source", value: "Ashtemobile")
-                        InfoRow(title: "Developer", value: app.developer ?? "AshteMobile")
+                        InfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
                         InfoRow(title: "Category", value: app.category ?? "Games")
                         InfoRow(title: "Version", value: app.version ?? "1.0")
-                        InfoRow(title: "Identifier", value: app.bundle ?? "com.ashtemobile.\(app.name.replacingOccurrences(of: " ", with: "").lowercased())")
+                        InfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile")
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 40)
@@ -341,7 +349,7 @@ struct HomeView: View {
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
             
-            let urlString = app.url
+            let urlString = app.download_url
             let finalURLString: String
             
             if urlString.hasSuffix(".plist") && !urlString.hasPrefix("itms-services") {
