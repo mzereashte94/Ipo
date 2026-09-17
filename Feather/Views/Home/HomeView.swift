@@ -7,16 +7,17 @@
 
 import SwiftUI
 import NimbleViews
+import AltSourceKit
 import Foundation
 import UIKit
 
 // MARK: - Models
-struct AshteHomeResponse: Codable {
+struct AshteSourceResponse: Codable {
     let name: String?
-    let apps: [AshteHomeApp]
+    let apps: [HomeApp]
 }
 
-struct AshteHomeApp: Codable, Identifiable {
+struct HomeApp: Codable, Identifiable {
     var id: Int { idNumber }
     let idNumber: Int
     let name: String
@@ -42,10 +43,10 @@ struct AshteHomeApp: Codable, Identifiable {
 
 // MARK: - View
 struct HomeView: View {
-    @State private var _apps: [AshteHomeApp] = []
+    @State private var _apps: [HomeApp] = []
     @State private var _searchText = ""
     
-    private var _filteredApps: [AshteHomeApp] {
+    private var _filteredApps: [HomeApp] {
         _apps.filter { _searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(_searchText) }
     }
     
@@ -97,8 +98,8 @@ struct HomeView: View {
                         secondary: _filteredApps.count.description
                     ) {
                         ForEach(_filteredApps) { app in
-                            NavigationLink(destination: AshteAppDetailView(app: app)) {
-                                AshteHomeCellView(app: app)
+                            NavigationLink(destination: AppDetailView(app: app)) {
+                                HomeAppCellView(app: app)
                                     .padding(.vertical, 4)
                             }
                         }
@@ -127,7 +128,7 @@ struct HomeView: View {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            let decoded = try JSONDecoder().decode(AshteHomeResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(AshteSourceResponse.self, from: data)
             DispatchQueue.main.async {
                 self._apps = decoded.apps
             }
@@ -168,8 +169,8 @@ extension HomeView {
     }
 }
 
-struct AshteHomeCellView: View {
-    let app: AshteHomeApp
+struct HomeAppCellView: View {
+    let app: HomeApp
     
     var body: some View {
         HStack(spacing: 15) {
@@ -210,17 +211,18 @@ struct AshteHomeCellView: View {
         .padding(.vertical, 4)
     }
     
-    private func startDownload(_ app: AshteHomeApp) {
+    private func startDownload(_ app: HomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
         guard let downloadURL = URL(string: app.download_url) else { return }
+        // 💡 بەکارهێنانی سیستمی فەرمی DownloadManager بۆ داونلۆد و واژووکردن و ناردن بۆ Library
         _ = DownloadManager.shared.startDownload(from: downloadURL)
     }
 }
 
-struct AshteAppDetailView: View {
-    let app: AshteHomeApp
+struct AppDetailView: View {
+    let app: HomeApp
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -294,10 +296,10 @@ struct AshteAppDetailView: View {
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .padding(.top, 20)
                     
-                    AshteInfoRow(title: "Version", value: app.version ?? "1.0")
-                    AshteInfoRow(title: "Category", value: app.category ?? "Apps")
-                    AshteInfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
-                    AshteInfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile")
+                    InfoRow(title: "Version", value: app.version ?? "1.0")
+                    InfoRow(title: "Category", value: app.category ?? "Apps")
+                    InfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
+                    InfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile")
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
@@ -307,7 +309,7 @@ struct AshteAppDetailView: View {
         .navigationBarHidden(true)
     }
     
-    private func startDownload(_ app: AshteHomeApp) {
+    private func startDownload(_ app: HomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
@@ -316,7 +318,7 @@ struct AshteAppDetailView: View {
     }
 }
 
-struct AshteInfoRow: View {
+struct InfoRow: View {
     let title: String
     let value: String
     
