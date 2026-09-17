@@ -11,7 +11,6 @@ import Foundation
 import UIKit
 
 // MARK: - Models
-// ⚠️ تێبینی گرنگ: ئەگەر مۆدێلی HomeApp لە فایلێکی تری پرۆژەکەتدا هەیە، ئەم بەشە بسڕەوە بۆ ئەوەی دووبارە نەبێتەوە.
 struct HomeApp: Codable, Identifiable {
     var id: String { url }
     let name: String
@@ -53,7 +52,7 @@ struct HomeView: View {
     }
     
     var body: some View {
-        NavigationView { // 💡 لێرەدا NavigationView ئاساییم بەکارهێنا لەبری NimbleViews بۆ ئەوەی ئیرۆر نەدات
+        NavigationView { 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     
@@ -119,7 +118,7 @@ struct HomeView: View {
                         }
                     }
                     
-                    // 3. Apps List (شێوازی ستوونی وەکو بەشی Sources)
+                    // 3. Apps List 
                     VStack(alignment: .leading, spacing: 15) {
                         if searchText.isEmpty {
                             Text("\(apps.count) Apps")
@@ -162,7 +161,7 @@ struct HomeView: View {
         .navigationViewStyle(.stack)
     }
     
-    // 💡 هێنانی داتا لە لینکی Ashtemobile.json
+    // هێنانی داتا 
     private func loadApps() async {
         guard let url = URL(string: "https://ashtemobile.site/Ashtemobile.json") else { return }
         var request = URLRequest(url: url)
@@ -179,7 +178,7 @@ struct HomeView: View {
     }
 }
 
-// MARK: - App Row View (شێوازی لیست)
+// MARK: - App Row View
 struct HomeAppRowView: View {
     let app: HomeApp
     
@@ -223,12 +222,20 @@ struct HomeAppRowView: View {
         .contentShape(Rectangle())
     }
     
+    // چارەسەری ئیرۆرەکەی گیتھەب لەم فەنکشنەیە
     private func installApp(_ app: HomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
         let urlString = app.url
-        let finalURLString: (urlString.hasSuffix(".plist") && !urlString.hasPrefix("itms-services")) ? "itms-services://?action=download-manifest&url=\(urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString)" : urlString
+        let finalURLString: String
+        
+        if urlString.hasSuffix(".plist") && !urlString.hasPrefix("itms-services") {
+            let encodedURL = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString
+            finalURLString = "itms-services://?action=download-manifest&url=\(encodedURL)"
+        } else {
+            finalURLString = urlString
+        }
         
         if let url = URL(string: finalURLString) {
             UIApplication.shared.open(url)
@@ -236,7 +243,7 @@ struct HomeAppRowView: View {
     }
 }
 
-// MARK: - App Detail View (پەنجەرەی زانیارییەکان)
+// MARK: - App Detail View
 struct AppDetailView: View {
     let app: HomeApp
     @Environment(\.presentationMode) var presentationMode
@@ -360,12 +367,20 @@ struct AppDetailView: View {
         .navigationBarHidden(true)
     }
     
+    // چارەسەری ئیرۆرەکەی گیتھەب لەم فەنکشنەشدا
     private func installApp(_ app: HomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
         let urlString = app.url
-        let finalURLString: (urlString.hasSuffix(".plist") && !urlString.hasPrefix("itms-services")) ? "itms-services://?action=download-manifest&url=\(urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString)" : urlString
+        let finalURLString: String
+        
+        if urlString.hasSuffix(".plist") && !urlString.hasPrefix("itms-services") {
+            let encodedURL = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString
+            finalURLString = "itms-services://?action=download-manifest&url=\(encodedURL)"
+        } else {
+            finalURLString = urlString
+        }
         
         if let url = URL(string: finalURLString) {
             UIApplication.shared.open(url)
