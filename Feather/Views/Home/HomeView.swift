@@ -29,14 +29,6 @@ struct HomeApp: Codable, Identifiable {
     let bundleIdentifier: String?
     let download_url: String
     
-    var currentUniqueId: String {
-        return "\(idNumber)"
-    }
-    
-    var currentDownloadUrl: URL? {
-        return URL(string: download_url)
-    }
-    
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
         case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url
@@ -205,10 +197,27 @@ struct HomeAppCellView: View {
             
             Spacer()
             
-            // بەکارهێنانی DownloadButtonView بە دروستکردنی ئۆبژکتی فەرمی ASRepository.App
-            DownloadButtonView(app: app.asRepositoryApp)
+            Button(action: {
+                startDownload(app)
+            }) {
+                Text("Get")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .frame(width: 68, height: 30)
+                    .background(Color.purple.opacity(0.12))
+                    .foregroundColor(.purple)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 4)
+    }
+    
+    private func startDownload(_ app: HomeApp) {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        guard let downloadURL = URL(string: app.download_url) else { return }
+        _ = DownloadManager.shared.startDownload(from: downloadURL)
     }
 }
 
@@ -271,10 +280,17 @@ struct AppDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 
-                DownloadButtonView(app: app.asRepositoryApp)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 126)
-                    .padding(.top, 5)
+                Button(action: { startDownload(app) }) {
+                    Text("Get")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .frame(width: 110, height: 38)
+                        .background(Color.purple)
+                        .clipShape(Capsule())
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 126)
+                .padding(.top, 5)
                 
                 VStack(alignment: .leading, spacing: 15) {
                     Text("Information")
@@ -293,15 +309,13 @@ struct AppDetailView: View {
         .edgesIgnoringSafeArea(.top)
         .navigationBarHidden(true)
     }
-}
-
-// MARK: - Safe Bridge Extension
-extension HomeApp {
-    var asRepositoryApp: ASRepository.App {
-        let repoApp = ASRepository.App()
-        repoApp.currentUniqueId = self.currentUniqueId
-        repoApp.currentDownloadUrl = self.currentDownloadUrl
-        return repoApp
+    
+    private func startDownload(_ app: HomeApp) {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        guard let downloadURL = URL(string: app.download_url) else { return }
+        _ = DownloadManager.shared.startDownload(from: downloadURL)
     }
 }
 
