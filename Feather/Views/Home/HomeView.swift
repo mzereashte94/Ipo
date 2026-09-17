@@ -32,22 +32,27 @@ struct HomeApp: Codable, Identifiable {
     }
 }
 
+// مۆدێلێکی تایبەت بۆ بانەرەکان بۆ ئەوەی کۆمپایلەر خێرا بێت
+struct HomeCustomBanner: Identifiable {
+    let id = UUID()
+    let title: String
+    let image: String
+    let link: String
+}
+
 // MARK: - Main Home View
 struct HomeView: View {
     @State private var apps: [HomeApp] = []
     @State private var _searchText: String = ""
     
-    let myCustomBanners = [
-        ("Telegram", "https://ashtemobile.site/img/t.png", "https://t.me/ashtemobile"),
-        ("Instagram", "https://ashtemobile.site/img/i.png", "https://www.instagram.com/ashtemobile")
+    private let banners = [
+        HomeCustomBanner(title: "Telegram", image: "https://ashtemobile.site/img/t.png", link: "https://t.me/ashtemobile"),
+        HomeCustomBanner(title: "Instagram", image: "https://ashtemobile.site/img/i.png", link: "https://www.instagram.com/ashtemobile")
     ]
     
-    var _filteredApps: [HomeApp] {
-        if _searchText.isEmpty {
-            return apps
-        } else {
-            return apps.filter { $0.name.localizedCaseInsensitiveContains(_searchText) }
-        }
+    private var filteredApps: [HomeApp] {
+        if _searchText.isEmpty { return apps }
+        return apps.filter { $0.name.localizedCaseInsensitiveContains(_searchText) }
     }
     
     var body: some View {
@@ -55,75 +60,16 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     
-                    // 1. Banners
                     if _searchText.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 15) {
-                                ForEach(0..<myCustomBanners.count, id: \.self) { index in
-                                    let banner = myCustomBanners[index]
-                                    Button(action: {
-                                        if let url = URL(string: banner.2) {
-                                            UIApplication.shared.open(url)
-                                        }
-                                    }) {
-                                        ZStack(alignment: .bottomLeading) {
-                                            AsyncImage(url: URL(string: banner.1)) { image in
-                                                image.resizable().aspectRatio(contentMode: .fill)
-                                            } placeholder: {
-                                                Color.purple.opacity(0.8)
-                                            }
-                                            
-                                            LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.7)]), startPoint: .top, endPoint: .bottom)
-                                            
-                                            Text(banner.0)
-                                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                                .foregroundColor(.white)
-                                                .padding(15)
-                                        }
-                                        .frame(width: 280, height: 160)
-                                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 10)
-                        }
+                        BannersSection(banners: banners)
                     }
                     
-                    // 2. Apps List
-                    VStack(alignment: .leading, spacing: 15) {
-                        if _searchText.isEmpty {
-                            Text("\(apps.count) Apps")
-                                .font(.system(size: 18, weight: .semibold, design: .rounded))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 20)
-                        }
-                        
-                        if _filteredApps.isEmpty && !_searchText.isEmpty {
-                            Text("هیچ بەرنامەیەک نەدۆزرایەوە بۆ '\(_searchText)'")
-                                .foregroundColor(.gray)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 20)
-                        } else {
-                            LazyVStack(spacing: 0) {
-                                ForEach(_filteredApps) { app in
-                                    NavigationLink(destination: AppDetailView(app: app)) {
-                                        HomeAppRowView(app: app)
-                                    }
-                                    .buttonStyle(.plain)
-                                    
-                                    Divider()
-                                        .padding(.leading, 85)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, 10)
+                    AppsListSection(apps: apps, filteredApps: filteredApps, searchText: _searchText)
+                    
                 }
                 .padding(.bottom, 40)
             }
-            .searchable(text: $_searchText, placement: .platform())
+            .searchable(text: $_searchText)
             .refreshable {
                 await loadApps()
             }
@@ -149,16 +95,107 @@ struct HomeView: View {
     }
 }
 
+// MARK: - Subviews (پارچە پارچەکراو بۆ ئاسانکاری گیتھەب)
+
+fileprivate struct BannersSection: View {
+    let banners: [HomeCustomBanner]
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 15) {
+                ForEach(banners) { banner in
+                    BannerCardView(banner: banner)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+        }
+    }
+}
+
+fileprivate struct BannerCardView: View {
+    let banner: HomeCustomBanner
+    
+    var body: some View {
+        Button(action: {
+            if let url = URL(string: banner.link) {
+                UIApplication.shared.open(url)
+            }
+        }) {
+            ZStack(alignment: .bottomLeading) {
+                AsyncImage(url: URL(string: banner.image)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        Color.purple.opacity(0.8)
+                    }
+                }
+                
+                LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.7)]), startPoint: .top, endPoint: .bottom)
+                
+                Text(banner.title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(15)
+            }
+            .frame(width: 280, height: 160)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+fileprivate struct AppsListSection: View {
+    let apps: [HomeApp]
+    let filteredApps: [HomeApp]
+    let searchText: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            if searchText.isEmpty {
+                Text("\(apps.count) Apps")
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 20)
+            }
+            
+            if filteredApps.isEmpty && !searchText.isEmpty {
+                Text("هیچ بەرنامەیەک نەدۆزرایەوە بۆ '\(searchText)'")
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredApps) { app in
+                        NavigationLink(destination: AppDetailView(app: app)) {
+                            HomeAppRowView(app: app)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Divider()
+                            .padding(.leading, 85)
+                    }
+                }
+            }
+        }
+        .padding(.top, 10)
+    }
+}
+
 // MARK: - App Row View
-struct HomeAppRowView: View {
+fileprivate struct HomeAppRowView: View {
     let app: HomeApp
     
     var body: some View {
         HStack(spacing: 15) {
-            AsyncImage(url: app.fullImageURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Color(UIColor.secondarySystemBackground)
+            AsyncImage(url: app.fullImageURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                default:
+                    Color(UIColor.secondarySystemBackground)
+                }
             }
             .frame(width: 65, height: 65)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -214,65 +251,16 @@ struct HomeAppRowView: View {
 }
 
 // MARK: - App Detail View
-struct AppDetailView: View {
+fileprivate struct AppDetailView: View {
     let app: HomeApp
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                ZStack(alignment: .topLeading) {
-                    AsyncImage(url: app.fullImageURL) { image in
-                        image.resizable()
-                             .aspectRatio(contentMode: .fill)
-                             .blur(radius: 40)
-                    } placeholder: {
-                        Color.purple.opacity(0.6)
-                    }
-                    .frame(height: 250)
-                    .clipped()
-                    
-                    HStack {
-                        Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 40, height: 40)
-                                .background(Color.black.opacity(0.3))
-                                .clipShape(Circle())
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 50)
-                }
                 
-                HStack(alignment: .center, spacing: 16) {
-                    AsyncImage(url: app.fullImageURL) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color(UIColor.secondarySystemBackground)
-                    }
-                    .frame(width: 100, height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
-                    .offset(y: -30)
-                    .padding(.bottom, -30)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(app.name)
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                            .foregroundColor(.primary)
-                        
-                        Text("Awesome App")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
+                DetailHeaderImage(app: app)
+                DetailAppInfo(app: app)
                 
                 Button(action: { installApp(app) }) {
                     Text("Get")
@@ -351,8 +339,78 @@ struct AppDetailView: View {
     }
 }
 
+fileprivate struct DetailHeaderImage: View {
+    let app: HomeApp
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            AsyncImage(url: app.fullImageURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill).blur(radius: 40)
+                default:
+                    Color.purple.opacity(0.6)
+                }
+            }
+            .frame(height: 250)
+            .clipped()
+            
+            HStack {
+                Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 40, height: 40)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Circle())
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 50)
+        }
+    }
+}
+
+fileprivate struct DetailAppInfo: View {
+    let app: HomeApp
+    
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            AsyncImage(url: app.fullImageURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                default:
+                    Color(UIColor.secondarySystemBackground)
+                }
+            }
+            .frame(width: 100, height: 100)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
+            .offset(y: -30)
+            .padding(.bottom, -30)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(app.name)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(.primary)
+                
+                Text("Awesome App")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+    }
+}
+
 // MARK: - Info Row Component
-struct InfoRow: View {
+fileprivate struct InfoRow: View {
     let title: String
     let value: String
     
