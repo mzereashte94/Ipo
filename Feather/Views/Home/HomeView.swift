@@ -3,15 +3,15 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  Modified to redirect downloads to external website
+//  Modified to fetch from Ashtemobile.json and use vertical list (Sources style)
 //
 
 import SwiftUI
-import NimbleViews
 import Foundation
 import UIKit
 
 // MARK: - Models
+// ⚠️ تێبینی گرنگ: ئەگەر مۆدێلی HomeApp لە فایلێکی تری پرۆژەکەتدا هەیە، ئەم بەشە بسڕەوە بۆ ئەوەی دووبارە نەبێتەوە.
 struct HomeApp: Codable, Identifiable {
     var id: String { url }
     let name: String
@@ -31,145 +31,140 @@ struct HomeApp: Codable, Identifiable {
         if img.hasPrefix("http") { return URL(string: img) }
         return URL(string: "https://ashtemobile.site/\(img)")
     }
-    
-    var fullBannerURL: URL? {
-        if let ban = banner {
-            if ban.hasPrefix("http") { return URL(string: ban) }
-            return URL(string: "https://ashtemobile.site/\(ban)")
-        }
-        return fullImageURL
-    }
 }
 
 // MARK: - Main Home View
 struct HomeView: View {
     @State private var apps: [HomeApp] = []
+    @State private var searchText: String = ""
     
-    // --- بەشی وێنە لاکێشەییەکان ---
-    @State private var currentBanner = 0
+    // بانەرەکان
     let myCustomBanners = [
-        "https://ashtemobile.site/img/t.png",
-        "https://ashtemobile.site/img/i.png"
+        ("Telegram", "https://ashtemobile.site/img/t.png", "https://t.me/ashtemobile"),
+        ("Instagram", "https://ashtemobile.site/img/i.png", "https://www.instagram.com/ashtemobile")
     ]
     
-    let myCustomLinks = [
-        "https://t.me/ashtemobile",
-        "https://www.instagram.com/ashtemobile"
-    ]
-    
-    let timer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
-    
-    var groupedApps: [(String, [HomeApp])] {
-        let dict = Dictionary(grouping: apps, by: { $0.category ?? "Apps" })
-        return dict.sorted { $0.key < $1.key }
+    var filteredApps: [HomeApp] {
+        if searchText.isEmpty {
+            return apps
+        } else {
+            return apps.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        }
     }
     
     var body: some View {
-        ZStack(alignment: .top) {
-            Color(UIColor.systemBackground).ignoresSafeArea()
-            
-            NBNavigationView("Discover") {
-                ScrollView {
-                    VStack(spacing: 35) {
+        NavigationView { // 💡 لێرەدا NavigationView ئاساییم بەکارهێنا لەبری NimbleViews بۆ ئەوەی ئیرۆر نەدات
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    
+                    // 1. Title & Search Box
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("Ashtemobile")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .padding(.horizontal, 20)
                         
-                        // 1. بەشی وێنە لاکێشەییەکان (Banners)
-                        if !myCustomBanners.isEmpty {
-                            TabView(selection: $currentBanner) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.gray)
+                            TextField("گەڕان...", text: $searchText)
+                                .foregroundColor(.primary)
+                                .disableAutocorrection(true)
+                            
+                            if !searchText.isEmpty {
+                                Button(action: { searchText = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.horizontal, 20)
+                    }
+                    .padding(.top, 10)
+                    
+                    // 2. Banners
+                    if searchText.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 15) {
                                 ForEach(0..<myCustomBanners.count, id: \.self) { index in
+                                    let banner = myCustomBanners[index]
                                     Button(action: {
-                                        if index < myCustomLinks.count, let url = URL(string: myCustomLinks[index]) {
+                                        if let url = URL(string: banner.2) {
                                             UIApplication.shared.open(url)
                                         }
                                     }) {
-                                        AsyncImage(url: URL(string: myCustomBanners[index])) { image in
-                                            image.resizable()
-                                                 .aspectRatio(contentMode: .fill)
-                                        } placeholder: {
-                                            Color(UIColor.secondarySystemBackground)
-                                                .overlay(Image(systemName: "photo").foregroundColor(.gray.opacity(0.5)))
+                                        ZStack(alignment: .bottomLeading) {
+                                            AsyncImage(url: URL(string: banner.1)) { image in
+                                                image.resizable().aspectRatio(contentMode: .fill)
+                                            } placeholder: {
+                                                Color.purple.opacity(0.8)
+                                            }
+                                            
+                                            LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.7)]), startPoint: .top, endPoint: .bottom)
+                                            
+                                            Text(banner.0)
+                                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                                .foregroundColor(.white)
+                                                .padding(15)
                                         }
+                                        .frame(width: 280, height: 160)
+                                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                                     }
                                     .buttonStyle(.plain)
-                                    .tag(index)
                                 }
                             }
-                            .frame(height: (UIScreen.main.bounds.width - 40) * (1948.0 / 3464.0))
-                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                             .padding(.horizontal, 20)
-                            .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 5)
-                            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .always))
-                            .onReceive(timer) { _ in
-                                guard !myCustomBanners.isEmpty else { return }
-                                withAnimation(.easeInOut(duration: 0.5)) {
-                                    currentBanner = (currentBanner + 1) % myCustomBanners.count
-                                }
-                            }
                         }
-                        
-                        // 2. بەشی یاری و بەرنامەکان
-                        VStack(alignment: .leading, spacing: 30) {
-                            ForEach(groupedApps, id: \.0) { category, categoryApps in
-                                VStack(alignment: .leading, spacing: 16) {
-                                    HStack(alignment: .lastTextBaseline) {
-                                        Text(category)
-                                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                                            .foregroundColor(.primary)
-                                        Spacer()
-                                        Text("See All")
-                                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                            .foregroundColor(.blue)
-                                    }
-                                    .padding(.horizontal, 20)
-                                    
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        LazyHStack(spacing: 16) {
-                                            ForEach(categoryApps) { app in
-                                                Button(action: {
-                                                    openWebsite()
-                                                }) {
-                                                    HomeAppCardView(app: app)
-                                                }
-                                                .buttonStyle(.plain)
-                                            }
-                                        }
-                                        .padding(.horizontal, 20)
-                                        .padding(.bottom, 15)
-                                        .padding(.top, 5)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // 3. بەشی سۆشیاڵ میدیاکان
-                        SocialMediaFooter()
-                            .padding(.top, 10)
-                            .padding(.bottom, 40)
                     }
-                    .padding(.top, 15)
+                    
+                    // 3. Apps List (شێوازی ستوونی وەکو بەشی Sources)
+                    VStack(alignment: .leading, spacing: 15) {
+                        if searchText.isEmpty {
+                            Text("\(apps.count) Apps")
+                                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 20)
+                        }
+                        
+                        if filteredApps.isEmpty && !searchText.isEmpty {
+                            Text("هیچ بەرنامەیەک نەدۆزرایەوە بۆ '\(searchText)'")
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 20)
+                        } else {
+                            LazyVStack(spacing: 0) {
+                                ForEach(filteredApps) { app in
+                                    NavigationLink(destination: AppDetailView(app: app)) {
+                                        HomeAppRowView(app: app)
+                                    }
+                                    .buttonStyle(.plain)
+                                    
+                                    Divider()
+                                        .padding(.leading, 85)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, 10)
                 }
-                .refreshable {
-                    await loadApps()
-                }
+                .padding(.bottom, 40)
+            }
+            .navigationBarHidden(true)
+            .refreshable {
+                await loadApps()
             }
             .onAppear {
                 Task { await loadApps() }
             }
         }
+        .navigationViewStyle(.stack)
     }
     
-    // 💡 فەنکشنی کردنەوەی وێبسایتەکە
-    private func openWebsite() {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
-        
-        if let url = URL(string: "https://ashtemobile.site") {
-            UIApplication.shared.open(url)
-        }
-    }
-    
-    // هێنانی داتا
+    // 💡 هێنانی داتا لە لینکی Ashtemobile.json
     private func loadApps() async {
-        guard let url = URL(string: "https://ashtemobile.site/ipaas.json") else { return }
+        guard let url = URL(string: "https://ashtemobile.site/Ashtemobile.json") else { return }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         do {
@@ -184,101 +179,215 @@ struct HomeView: View {
     }
 }
 
-// MARK: - App Card View
-struct HomeAppCardView: View {
+// MARK: - App Row View (شێوازی لیست)
+struct HomeAppRowView: View {
     let app: HomeApp
     
     var body: some View {
-        VStack(alignment: .center, spacing: 10) {
-            
+        HStack(spacing: 15) {
             AsyncImage(url: app.fullImageURL) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
                 Color(UIColor.secondarySystemBackground)
             }
-            .frame(width: 80, height: 80)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+            .frame(width: 65, height: 65)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.1), radius: 3, x: 0, y: 2)
             
-            VStack(spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(app.name)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
                     .lineLimit(1)
-                    .multilineTextAlignment(.center)
                 
-                Text(app.category ?? "App")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                Text("\(app.version ?? "1.0") • Awesome App")
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
             }
             
-            Spacer(minLength: 5)
+            Spacer()
             
-            // 💡 لێرەدا GETم گۆڕی بۆ OPEN
-            Text("OPEN")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .frame(maxWidth: .infinity)
-                .frame(height: 30)
-                .background(Color.blue.opacity(0.12))
-                .foregroundColor(.blue)
-                .clipShape(Capsule())
-        }
-        .padding(14)
-        .frame(width: 135, height: 200)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
-    }
-}
-
-// MARK: - Social Media Footer
-struct SocialMediaFooter: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("Connect With Us")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundColor(.primary)
-            
-            HStack(spacing: 24) {
-                SocialButton(icon: "paperplane.fill", color: .blue, url: "https://t.me/ashtemobile")
-                SocialButton(icon: "camera.fill", color: Color(UIColor.systemPurple), url: "https://www.instagram.com/ashtemobile")
-                SocialButton(icon: "play.tv.fill", color: .primary, url: "https://www.tiktok.com/@ashtemobile")
+            Button(action: {
+                installApp(app)
+            }) {
+                Text("Get")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .frame(width: 70, height: 32)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .foregroundColor(Color(UIColor.systemPurple))
+                    .clipShape(Capsule())
             }
         }
-        .padding(.vertical, 24)
-        .frame(maxWidth: .infinity)
-        .background(Color(UIColor.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+    
+    private func installApp(_ app: HomeApp) {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        let urlString = app.url
+        let finalURLString: (urlString.hasSuffix(".plist") && !urlString.hasPrefix("itms-services")) ? "itms-services://?action=download-manifest&url=\(urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString)" : urlString
+        
+        if let url = URL(string: finalURLString) {
+            UIApplication.shared.open(url)
+        }
     }
 }
 
-struct SocialButton: View {
-    let icon: String
-    let color: Color
-    let url: String
+// MARK: - App Detail View (پەنجەرەی زانیارییەکان)
+struct AppDetailView: View {
+    let app: HomeApp
+    @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
-        Button(action: {
-            if let link = URL(string: url) {
-                UIApplication.shared.open(link)
+        ScrollView {
+            VStack(spacing: 0) {
+                // Header Image
+                ZStack(alignment: .topLeading) {
+                    AsyncImage(url: app.fullImageURL) { image in
+                        image.resizable()
+                             .aspectRatio(contentMode: .fill)
+                             .blur(radius: 40)
+                    } placeholder: {
+                        Color.purple.opacity(0.6)
+                    }
+                    .frame(height: 250)
+                    .clipped()
+                    
+                    HStack {
+                        Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 40, height: 40)
+                                .background(Color.black.opacity(0.3))
+                                .clipShape(Circle())
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 50)
+                }
+                
+                // App Info
+                HStack(alignment: .center, spacing: 16) {
+                    AsyncImage(url: app.fullImageURL) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color(UIColor.secondarySystemBackground)
+                    }
+                    .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
+                    .offset(y: -30)
+                    .padding(.bottom, -30)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(app.name)
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.primary)
+                        
+                        Text("Awesome App")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                
+                // Get Button
+                Button(action: { installApp(app) }) {
+                    Text("Get")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(UIColor.systemPurple))
+                        .frame(width: 100, height: 35)
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .clipShape(Capsule())
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 136)
+                .padding(.top, 5)
+                
+                // Version
+                HStack {
+                    Image(systemName: "tag")
+                    Text(app.version ?? "1.0")
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color(UIColor.systemGray6))
+                .clipShape(Capsule())
+                .padding(.horizontal, 20)
+                .padding(.top, 25)
+                
+                // Description
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Description")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                    Text("Downloaded from AshteMobile Source.")
+                        .font(.system(size: 15))
+                        .foregroundColor(.primary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 25)
+                
+                Divider().padding(.vertical, 15).padding(.horizontal, 20)
+                
+                // Information
+                VStack(alignment: .leading, spacing: 15) {
+                    Text("Information")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .padding(.bottom, 5)
+                    
+                    InfoRow(title: "Source", value: "Ashtemobile")
+                    InfoRow(title: "Developer", value: app.developer ?? "AshteMobile")
+                    InfoRow(title: "Category", value: app.category ?? "Games")
+                    InfoRow(title: "Version", value: app.version ?? "1.0")
+                    InfoRow(title: "Identifier", value: app.bundle ?? "com.ashtemobile.\(app.name.replacingOccurrences(of: " ", with: "").lowercased())")
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
             }
-        }) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 50, height: 50)
-                .background(color)
-                .clipShape(Circle())
         }
-        .buttonStyle(ScaleButtonStyle())
+        .edgesIgnoringSafeArea(.top)
+        .navigationBarHidden(true)
+    }
+    
+    private func installApp(_ app: HomeApp) {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        let urlString = app.url
+        let finalURLString: (urlString.hasSuffix(".plist") && !urlString.hasPrefix("itms-services")) ? "itms-services://?action=download-manifest&url=\(urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString)" : urlString
+        
+        if let url = URL(string: finalURLString) {
+            UIApplication.shared.open(url)
+        }
     }
 }
 
-struct ScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
-            .animation(.easeInOut(duration: 0.2), value: configuration.isPressed)
+// MARK: - Info Row Component
+struct InfoRow: View {
+    let title: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(.primary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(.secondary)
+        }
+        Divider()
     }
 }
