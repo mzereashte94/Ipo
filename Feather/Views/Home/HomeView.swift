@@ -217,7 +217,9 @@ struct HomeAppCellView: View {
         generator.impactOccurred()
         
         guard let downloadURL = URL(string: app.download_url) else { return }
-        _ = DownloadManager.shared.startDownload(from: downloadURL)
+        
+        // ئێرە کێشەکە بوو کە ڕاستم کردەوە: idـم بۆ زیاد کردووە وەکو سۆرسەکان
+        _ = DownloadManager.shared.startDownload(from: downloadURL, id: String(app.idNumber))
     }
 }
 
@@ -315,7 +317,9 @@ struct AppDetailView: View {
         generator.impactOccurred()
         
         guard let downloadURL = URL(string: app.download_url) else { return }
-        _ = DownloadManager.shared.startDownload(from: downloadURL)
+        
+        // ئێرە کێشەکە بوو کە ڕاستم کردەوە: idـم بۆ زیاد کردووە وەکو سۆرسەکان
+        _ = DownloadManager.shared.startDownload(from: downloadURL, id: String(app.idNumber))
     }
 }
 
