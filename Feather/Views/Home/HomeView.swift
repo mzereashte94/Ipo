@@ -3,10 +3,10 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  Modified to fetch from Ashtemobile.json and use vertical list (Sources style)
 //
 
 import SwiftUI
+import NimbleViews
 import Foundation
 import UIKit
 
@@ -35,7 +35,7 @@ struct HomeApp: Codable, Identifiable {
 // MARK: - Main Home View
 struct HomeView: View {
     @State private var apps: [HomeApp] = []
-    @State private var searchText: String = ""
+    @State private var _searchText: String = ""
     
     // بانەرەکان
     let myCustomBanners = [
@@ -43,48 +43,21 @@ struct HomeView: View {
         ("Instagram", "https://ashtemobile.site/img/i.png", "https://www.instagram.com/ashtemobile")
     ]
     
-    var filteredApps: [HomeApp] {
-        if searchText.isEmpty {
+    var _filteredApps: [HomeApp] {
+        if _searchText.isEmpty {
             return apps
         } else {
-            return apps.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            return apps.filter { $0.name.localizedCaseInsensitiveContains(_searchText) }
         }
     }
     
     var body: some View {
-        NavigationView { 
+        NBNavigationView(.localized("Discover")) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     
-                    // 1. Title & Search Box
-                    VStack(alignment: .leading, spacing: 15) {
-                        Text("Ashtemobile")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .padding(.horizontal, 20)
-                        
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(.gray)
-                            TextField("گەڕان...", text: $searchText)
-                                .foregroundColor(.primary)
-                                .disableAutocorrection(true)
-                            
-                            if !searchText.isEmpty {
-                                Button(action: { searchText = "" }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                        }
-                        .padding(10)
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .padding(.horizontal, 20)
-                    }
-                    .padding(.top, 10)
-                    
-                    // 2. Banners
-                    if searchText.isEmpty {
+                    // 1. Banners
+                    if _searchText.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 15) {
                                 ForEach(0..<myCustomBanners.count, id: \.self) { index in
@@ -115,26 +88,27 @@ struct HomeView: View {
                                 }
                             }
                             .padding(.horizontal, 20)
+                            .padding(.top, 10)
                         }
                     }
                     
-                    // 3. Apps List 
+                    // 2. Apps List
                     VStack(alignment: .leading, spacing: 15) {
-                        if searchText.isEmpty {
+                        if _searchText.isEmpty {
                             Text("\(apps.count) Apps")
                                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundColor(.secondary)
                                 .padding(.horizontal, 20)
                         }
                         
-                        if filteredApps.isEmpty && !searchText.isEmpty {
-                            Text("هیچ بەرنامەیەک نەدۆزرایەوە بۆ '\(searchText)'")
+                        if _filteredApps.isEmpty && !_searchText.isEmpty {
+                            Text("هیچ بەرنامەیەک نەدۆزرایەوە بۆ '\(_searchText)'")
                                 .foregroundColor(.gray)
                                 .padding(.horizontal, 20)
                                 .padding(.top, 20)
                         } else {
                             LazyVStack(spacing: 0) {
-                                ForEach(filteredApps) { app in
+                                ForEach(_filteredApps) { app in
                                     NavigationLink(destination: AppDetailView(app: app)) {
                                         HomeAppRowView(app: app)
                                     }
@@ -150,7 +124,7 @@ struct HomeView: View {
                 }
                 .padding(.bottom, 40)
             }
-            .navigationBarHidden(true)
+            .searchable(text: $_searchText, placement: .platform())
             .refreshable {
                 await loadApps()
             }
@@ -158,10 +132,9 @@ struct HomeView: View {
                 Task { await loadApps() }
             }
         }
-        .navigationViewStyle(.stack)
     }
     
-    // هێنانی داتا 
+    // هێنانی داتا
     private func loadApps() async {
         guard let url = URL(string: "https://ashtemobile.site/Ashtemobile.json") else { return }
         var request = URLRequest(url: url)
@@ -222,7 +195,6 @@ struct HomeAppRowView: View {
         .contentShape(Rectangle())
     }
     
-    // چارەسەری ئیرۆرەکەی گیتھەب لەم فەنکشنەیە
     private func installApp(_ app: HomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
@@ -367,7 +339,6 @@ struct AppDetailView: View {
         .navigationBarHidden(true)
     }
     
-    // چارەسەری ئیرۆرەکەی گیتھەب لەم فەنکشنەشدا
     private func installApp(_ app: HomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
