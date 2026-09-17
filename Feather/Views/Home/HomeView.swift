@@ -11,12 +11,12 @@ import Foundation
 import UIKit
 
 // MARK: - Models
-struct AshteSourceResponse: Codable {
+struct AshteHomeResponse: Codable {
     let name: String?
-    let apps: [HomeApp]
+    let apps: [AshteHomeApp]
 }
 
-struct HomeApp: Codable, Identifiable {
+struct AshteHomeApp: Codable, Identifiable {
     var id: Int { idNumber }
     let idNumber: Int
     let name: String
@@ -42,19 +42,17 @@ struct HomeApp: Codable, Identifiable {
 
 // MARK: - View
 struct HomeView: View {
-    @State private var _apps: [HomeApp] = []
+    @State private var _apps: [AshteHomeApp] = []
     @State private var _searchText = ""
     
-    private var _filteredApps: [HomeApp] {
+    private var _filteredApps: [AshteHomeApp] {
         _apps.filter { _searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(_searchText) }
     }
     
-    // MARK: Body
     var body: some View {
         NBNavigationView(.localized("Discover")) {
             List {
                 if !_filteredApps.isEmpty {
-                    // MARK: - Featured Header Card
                     Section {
                         Button(action: {
                             if let url = URL(string: "https://t.me/ashtemobile") {
@@ -94,14 +92,13 @@ struct HomeView: View {
                     }
                     .listRowBackground(Color(UIColor.secondarySystemGroupedBackground))
                     
-                    // MARK: - Apps List Section
                     NBSection(
                         .localized("Applications"),
                         secondary: _filteredApps.count.description
                     ) {
                         ForEach(_filteredApps) { app in
-                            NavigationLink(destination: AppDetailView(app: app)) {
-                                HomeAppCellView(app: app)
+                            NavigationLink(destination: AshteAppDetailView(app: app)) {
+                                AshteHomeCellView(app: app)
                                     .padding(.vertical, 4)
                             }
                         }
@@ -130,7 +127,7 @@ struct HomeView: View {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            let decoded = try JSONDecoder().decode(AshteSourceResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(AshteHomeResponse.self, from: data)
             DispatchQueue.main.async {
                 self._apps = decoded.apps
             }
@@ -140,9 +137,7 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Extension: View Components
 extension HomeView {
-    
     @ViewBuilder
     private func _emptyStateView() -> some View {
         if #available(iOS 17, *) {
@@ -173,9 +168,8 @@ extension HomeView {
     }
 }
 
-// MARK: - Home App Cell View
-struct HomeAppCellView: View {
-    let app: HomeApp
+struct AshteHomeCellView: View {
+    let app: AshteHomeApp
     
     var body: some View {
         HStack(spacing: 15) {
@@ -216,7 +210,7 @@ struct HomeAppCellView: View {
         .padding(.vertical, 4)
     }
     
-    private func startDownload(_ app: HomeApp) {
+    private func startDownload(_ app: AshteHomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
@@ -225,9 +219,8 @@ struct HomeAppCellView: View {
     }
 }
 
-// MARK: - App Detail View
-struct AppDetailView: View {
-    let app: HomeApp
+struct AshteAppDetailView: View {
+    let app: AshteHomeApp
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -296,16 +289,15 @@ struct AppDetailView: View {
                 .padding(.horizontal, 126)
                 .padding(.top, 5)
                 
-                // Information section
                 VStack(alignment: .leading, spacing: 15) {
                     Text("Information")
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .padding(.top, 20)
                     
-                    InfoRow(title: "Version", value: app.version ?? "1.0")
-                    InfoRow(title: "Category", value: app.category ?? "Apps")
-                    InfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
-                    InfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile")
+                    AshteInfoRow(title: "Version", value: app.version ?? "1.0")
+                    AshteInfoRow(title: "Category", value: app.category ?? "Apps")
+                    AshteInfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
+                    AshteInfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile")
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
@@ -315,7 +307,7 @@ struct AppDetailView: View {
         .navigationBarHidden(true)
     }
     
-    private func startDownload(_ app: HomeApp) {
+    private func startDownload(_ app: AshteHomeApp) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
@@ -324,8 +316,7 @@ struct AppDetailView: View {
     }
 }
 
-// MARK: - Info Row Component
-struct InfoRow: View {
+struct AshteInfoRow: View {
     let title: String
     let value: String
     
