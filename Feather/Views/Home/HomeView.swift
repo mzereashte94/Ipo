@@ -37,7 +37,6 @@ struct HomeView: View {
     @State private var apps: [HomeApp] = []
     @State private var _searchText: String = ""
     
-    // بانەرەکان
     let myCustomBanners = [
         ("Telegram", "https://ashtemobile.site/img/t.png", "https://t.me/ashtemobile"),
         ("Instagram", "https://ashtemobile.site/img/i.png", "https://www.instagram.com/ashtemobile")
@@ -134,7 +133,6 @@ struct HomeView: View {
         }
     }
     
-    // هێنانی داتا
     private func loadApps() async {
         guard let url = URL(string: "https://ashtemobile.site/Ashtemobile.json") else { return }
         var request = URLRequest(url: url)
@@ -223,7 +221,6 @@ struct AppDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Header Image
                 ZStack(alignment: .topLeading) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable()
@@ -250,7 +247,6 @@ struct AppDetailView: View {
                     .padding(.top, 50)
                 }
                 
-                // App Info
                 HStack(alignment: .center, spacing: 16) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -278,7 +274,6 @@ struct AppDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 
-                // Get Button
                 Button(action: { installApp(app) }) {
                     Text("Get")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
@@ -291,7 +286,6 @@ struct AppDetailView: View {
                 .padding(.horizontal, 136)
                 .padding(.top, 5)
                 
-                // Version
                 HStack {
                     Image(systemName: "tag")
                     Text(app.version ?? "1.0")
@@ -305,7 +299,6 @@ struct AppDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 25)
                 
-                // Description
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Description")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -319,7 +312,6 @@ struct AppDetailView: View {
                 
                 Divider().padding(.vertical, 15).padding(.horizontal, 20)
                 
-                // Information
                 VStack(alignment: .leading, spacing: 15) {
                     Text("Information")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
