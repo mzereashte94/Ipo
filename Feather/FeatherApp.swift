@@ -20,10 +20,8 @@ struct AshteMobileApp: App {
     @StateObject var downloadManager = DownloadManager.shared
     let storage = Storage.shared
     
-    // گۆڕاوەکە بۆ زانینی ئەوەی کە شاشەکە بینراوە یان نا
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
     
-    // 💡 دروستکردنی بایندینگی سەلامەت بۆ ئەوەی Xcode ئیرۆر نەدات
     private var showOnboardingBinding: Binding<Bool> {
         Binding<Bool>(
             get: { !hasCompletedOnboarding },
@@ -41,9 +39,8 @@ struct AshteMobileApp: App {
                     .onOpenURL(perform: _handleURL)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .animation(.smooth, value: downloadManager.manualDownloads.description)
+            .animation(.easeInOut, value: downloadManager.manualDownloads.description)
             
-            // 💡 بانگکردنی شاشەی خێرهاتنەکە بە سەلامەتی
             .fullScreenCover(isPresented: showOnboardingBinding) {
                 Group {
                     if #available(iOS 17.0, *) {
