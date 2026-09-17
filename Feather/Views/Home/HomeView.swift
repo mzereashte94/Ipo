@@ -29,7 +29,6 @@ struct HomeApp: Codable, Identifiable {
     let bundleIdentifier: String?
     let download_url: String
     
-    // ناسنامە و لینک بۆ DownloadButtonView
     var currentUniqueId: String {
         return "\(idNumber)"
     }
@@ -206,7 +205,7 @@ struct HomeAppCellView: View {
             
             Spacer()
             
-            // بەکارهێنانی ڕاستەوخۆی DownloadButtonViewـی پڕۆژەکەت
+            // بەکارهێنانی DownloadButtonView بە دروستکردنی ئۆبژکتی فەرمی ASRepository.App
             DownloadButtonView(app: app.asRepositoryApp)
         }
         .padding(.vertical, 4)
@@ -272,7 +271,6 @@ struct AppDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 
-                // بەکارهێنانی DownloadButtonView لە پەڕەی وردەکاریشدا
                 DownloadButtonView(app: app.asRepositoryApp)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 126)
@@ -297,13 +295,13 @@ struct AppDetailView: View {
     }
 }
 
-// MARK: - Extension to bridge HomeApp to ASRepository.App
+// MARK: - Safe Bridge Extension
 extension HomeApp {
     var asRepositoryApp: ASRepository.App {
-        let app = ASRepository.App()
-        app.currentUniqueId = self.currentUniqueId
-        app.currentDownloadUrl = self.currentDownloadUrl
-        return app
+        let repoApp = ASRepository.App()
+        repoApp.currentUniqueId = self.currentUniqueId
+        repoApp.currentDownloadUrl = self.currentDownloadUrl
+        return repoApp
     }
 }
 
