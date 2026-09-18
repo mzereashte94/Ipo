@@ -136,13 +136,11 @@ struct HomeView: View {
         .task {
             await loadRemoteApps()
         }
-        // پەنجەرەی ئینستاڵ هەمیشە لێرەیە و چاوەڕێیە
         .sheet(item: $_selectedInstallAppPresenting) { app in
             InstallPreviewView(app: app.base, isSharing: app.archive)
                 .presentationDetents([.height(200)])
                 .presentationDragIndicator(.visible)
         }
-        // گوێگرتن لە نۆتیفیکەیشنی ئینستاڵ
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AshteMobile.installApp"))) { _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if let signedApp = _signedApps.first {
@@ -152,15 +150,15 @@ struct HomeView: View {
         }
     }
     
-    // 💡 پرۆسەی دۆزینەوە و واژووکردنی ئۆتۆماتیکی پاش تەواوبوونی داونلۆد
-    private func handleAutoSign(appName: String) {
-        // کەمێک چاوەڕێ دەکەین با بە تەواوی لە داتابەیس سەیڤ بێت
+    // 💡 چارەسەری قایم: وەرگرتنی ڕاستەوخۆی کۆتا ئەپی داونلۆدکراو بێ پێویستبوون بە پشکنینی ناو
+    private func handleAutoSign() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
+            
             guard let importedApps = try? Storage.shared.context.fetch(request),
-                  let importedApp = importedApps.first(where: { $0.name?.contains(appName) == true || appName.contains($0.name ?? "") }) else {
-                print("App not found in CoreData")
+                  let importedApp = importedApps.first else {
+                print("No imported app found")
                 return
             }
             
@@ -171,7 +169,6 @@ struct HomeView: View {
             let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
             let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
             
-            // واژووکردنی بێدەنگ لە باکگراوند
             FR.signPackageFile(
                 importedApp,
                 using: options,
@@ -183,7 +180,6 @@ struct HomeView: View {
                         if options.post_deleteAppAfterSigned {
                             Storage.shared.deleteApp(for: importedApp)
                         }
-                        // پاش سەرکەوتن، نۆتیفیکەیشنی ئینستاڵ دەنێرێت
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
                     } else {
                         print("Signing Error: \(String(describing: error))")
@@ -230,13 +226,11 @@ struct AshteHomeEmptyView: View {
 // MARK: - App Cell View
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
-    var onDownloadComplete: (String) -> Void
+    var onDownloadComplete: () -> Void
     
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
     @State private var cancellable: AnyCancellable?
-    
-    // 💡 گۆڕاوی نوێ بۆ زانینی کاتی دەستپێکردن و تەواوبوونی داونلۆد
     @State private var isDownloading = false
 
     var body: some View {
@@ -296,7 +290,6 @@ struct AshteHomeAppCell: View {
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
         .onChange(of: downloadManager.downloads.count) { _ in
-            // 💡 لۆژیکە پۆڵایینەکە: ئەگەر داونلۆد هەبوو دەیکاتە True، ئەگەر نەما دەیکاتە False و فەرمانی ئینستاڵ دەنێرێت!
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
             
             if isCurrentlyDownloading {
@@ -304,7 +297,7 @@ struct AshteHomeAppCell: View {
                 setupObserver()
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
-                onDownloadComplete(app.name)
+                onDownloadComplete()
             }
         }
     }
@@ -340,7 +333,7 @@ struct AshteHomeAppCell: View {
 // MARK: - App Detail View
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
-    var onDownloadComplete: (String) -> Void
+    var onDownloadComplete: () -> Void
     @Environment(\.presentationMode) var presentationMode
     
     @ObservedObject private var downloadManager = DownloadManager.shared
@@ -457,7 +450,7 @@ struct AshteHomeAppDetailView: View {
                 setupObserver()
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
-                onDownloadComplete(app.name)
+                onDownloadComplete()
             }
         }
     }
