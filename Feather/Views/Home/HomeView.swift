@@ -57,7 +57,6 @@ struct HomeView: View {
     @State private var searchText = ""
     
     @State private var _selectedInstallAppPresenting: AnyApp?
-    @State private var pendingInstallAppID: String? = nil
     
     @FetchRequest(
         entity: Signed.entity(),
@@ -115,8 +114,8 @@ struct HomeView: View {
                         secondary: filteredApps.count.description
                     ) {
                         ForEach(filteredApps) { app in
-                            NavigationLink(destination: AshteHomeAppDetailView(app: app, pendingInstallAppID: $pendingInstallAppID)) {
-                                AshteHomeAppCell(app: app, pendingInstallAppID: $pendingInstallAppID)
+                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
+                                AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
                                     .padding(.vertical, 4)
                             }
                         }
@@ -133,27 +132,64 @@ struct HomeView: View {
             .refreshable {
                 await loadRemoteApps()
             }
-            .sheet(item: $_selectedInstallAppPresenting) { app in
-                InstallPreviewView(app: app.base, isSharing: app.archive)
-                    .presentationDetents([.height(200)])
-                    .presentationDragIndicator(.visible)
-            }
-            .onChange(of: DownloadManager.shared.downloads.count) { _ in
-                if let pendingID = pendingInstallAppID {
-                    let isStillDownloading = DownloadManager.shared.downloads.contains(where: { $0.id == pendingID })
-                    if !isStillDownloading {
-                        pendingInstallAppID = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            if let latest = _signedApps.first {
-                                _selectedInstallAppPresenting = AnyApp(base: latest)
-                            }
-                        }
-                    }
-                }
-            }
         }
         .task {
             await loadRemoteApps()
+        }
+        // پەنجەرەی ئینستاڵ هەمیشە لێرەیە و چاوەڕێیە
+        .sheet(item: $_selectedInstallAppPresenting) { app in
+            InstallPreviewView(app: app.base, isSharing: app.archive)
+                .presentationDetents([.height(200)])
+                .presentationDragIndicator(.visible)
+        }
+        // گوێگرتن لە نۆتیفیکەیشنی ئینستاڵ
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AshteMobile.installApp"))) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if let signedApp = _signedApps.first {
+                    _selectedInstallAppPresenting = AnyApp(base: signedApp)
+                }
+            }
+        }
+    }
+    
+    // 💡 پرۆسەی دۆزینەوە و واژووکردنی ئۆتۆماتیکی پاش تەواوبوونی داونلۆد
+    private func handleAutoSign(appName: String) {
+        // کەمێک چاوەڕێ دەکەین با بە تەواوی لە داتابەیس سەیڤ بێت
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            let request = NSFetchRequest<Imported>(entityName: "Imported")
+            request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
+            guard let importedApps = try? Storage.shared.context.fetch(request),
+                  let importedApp = importedApps.first(where: { $0.name?.contains(appName) == true || appName.contains($0.name ?? "") }) else {
+                print("App not found in CoreData")
+                return
+            }
+            
+            let options = OptionsManager.shared.options
+            let certRequest = NSFetchRequest<CertificatePair>(entityName: "CertificatePair")
+            certRequest.sortDescriptors = [NSSortDescriptor(keyPath: \CertificatePair.date, ascending: false)]
+            let certs = try? Storage.shared.context.fetch(certRequest)
+            let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
+            let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
+            
+            // واژووکردنی بێدەنگ لە باکگراوند
+            FR.signPackageFile(
+                importedApp,
+                using: options,
+                icon: nil,
+                certificate: selectedCert
+            ) { error in
+                DispatchQueue.main.async {
+                    if error == nil {
+                        if options.post_deleteAppAfterSigned {
+                            Storage.shared.deleteApp(for: importedApp)
+                        }
+                        // پاش سەرکەوتن، نۆتیفیکەیشنی ئینستاڵ دەنێرێت
+                        NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                    } else {
+                        print("Signing Error: \(String(describing: error))")
+                    }
+                }
+            }
         }
     }
     
@@ -194,11 +230,14 @@ struct AshteHomeEmptyView: View {
 // MARK: - App Cell View
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
-    @Binding var pendingInstallAppID: String?
+    var onDownloadComplete: (String) -> Void
     
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
     @State private var cancellable: AnyCancellable?
+    
+    // 💡 گۆڕاوی نوێ بۆ زانینی کاتی دەستپێکردن و تەواوبوونی داونلۆد
+    @State private var isDownloading = false
 
     var body: some View {
         HStack(spacing: 15) {
@@ -234,18 +273,16 @@ struct AshteHomeAppCell: View {
                             .frame(width: 31, height: 31)
                             .animation(.smooth, value: downloadProgress)
 
-                        Image(systemName: downloadProgress >= 0.75 ? "signature" : "square.fill")
+                        Image(systemName: "square.fill")
                             .foregroundStyle(.purple)
                             .font(.footnote).bold()
                     }
                     .onTapGesture {
-                        if downloadProgress <= 0.75 {
-                            downloadManager.cancelDownload(currentDownload)
-                        }
+                        downloadManager.cancelDownload(currentDownload)
                     }
                 } else {
                     Button(action: { triggerDownload() }) {
-                        Text("Get")
+                        Text(isDownloading ? "..." : "Get")
                             .font(.system(size: 14, weight: .bold, design: .rounded))
                             .frame(width: 68, height: 30)
                             .background(Color.purple.opacity(0.12))
@@ -258,16 +295,23 @@ struct AshteHomeAppCell: View {
         }
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
-        .onChange(of: downloadManager.downloads.description) { _ in
-            setupObserver()
+        .onChange(of: downloadManager.downloads.count) { _ in
+            // 💡 لۆژیکە پۆڵایینەکە: ئەگەر داونلۆد هەبوو دەیکاتە True، ئەگەر نەما دەیکاتە False و فەرمانی ئینستاڵ دەنێرێت!
+            let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
+            
+            if isCurrentlyDownloading {
+                isDownloading = true
+                setupObserver()
+            } else if isDownloading && !isCurrentlyDownloading {
+                isDownloading = false
+                onDownloadComplete(app.name)
+            }
         }
     }
     
     private func triggerDownload() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
-        
-        pendingInstallAppID = app.stringID
         
         if let dlURL = app.downloadURLObject {
             _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
@@ -296,12 +340,13 @@ struct AshteHomeAppCell: View {
 // MARK: - App Detail View
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
-    @Binding var pendingInstallAppID: String?
+    var onDownloadComplete: (String) -> Void
     @Environment(\.presentationMode) var presentationMode
     
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
     @State private var cancellable: AnyCancellable?
+    @State private var isDownloading = false
     
     var body: some View {
         ScrollView {
@@ -362,7 +407,7 @@ struct AshteHomeAppDetailView: View {
                         ZStack {
                             Capsule().fill(Color.purple.opacity(0.12))
                             HStack {
-                                Text("Signing...")
+                                Text("Downloading...")
                                     .font(.system(size: 16, weight: .bold, design: .rounded))
                                     .foregroundColor(.purple)
                                 Spacer()
@@ -370,10 +415,10 @@ struct AshteHomeAppDetailView: View {
                             }
                             .padding(.horizontal, 20)
                         }
-                        .frame(width: 150, height: 38)
+                        .frame(width: 160, height: 38)
                     } else {
                         Button(action: { triggerDownload() }) {
-                            Text("Get")
+                            Text(isDownloading ? "..." : "Get")
                                 .font(.system(size: 16, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                                 .frame(width: 110, height: 38)
@@ -404,16 +449,22 @@ struct AshteHomeAppDetailView: View {
         .navigationBarHidden(true)
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
-        .onChange(of: downloadManager.downloads.description) { _ in
-            setupObserver()
+        .onChange(of: downloadManager.downloads.count) { _ in
+            let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
+            
+            if isCurrentlyDownloading {
+                isDownloading = true
+                setupObserver()
+            } else if isDownloading && !isCurrentlyDownloading {
+                isDownloading = false
+                onDownloadComplete(app.name)
+            }
         }
     }
     
     private func triggerDownload() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
-        
-        pendingInstallAppID = app.stringID
         
         if let dlURL = app.downloadURLObject {
             _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
