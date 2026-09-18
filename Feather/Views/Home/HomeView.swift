@@ -51,22 +51,26 @@ struct AshteHomeAppModel: Codable, Identifiable {
     }
 }
 
-// MARK: - Safe Extended Models (مۆدێلی سەلامەت بۆ دیزاینە نوێیەکە)
-struct AshteHomeExtraResponse: Codable {
-    let news: [AshteHomeNewsItem]?
-    let apps: [AshteHomeAppExtendedInfo]?
+// MARK: - Extra Data Manager (بۆ وەرگرتنی داتا نوێیەکان بەبێ تێکدانی پڕۆژەکەت)
+class AshteDataManager {
+    static let shared = AshteDataManager()
+    var extraInfo: [Int: AshteHomeExtraAppInfo] = [:]
 }
 
-struct AshteHomeNewsItem: Codable, Identifiable {
-    var id: String { identifier ?? UUID().uuidString }
-    let identifier: String?
-    let title: String?
+struct AshteHomeNewsResponse: Codable {
+    let news: [AshteHomeNewsModel]?
+}
+
+struct AshteHomeNewsModel: Codable, Identifiable {
+    var id: String { identifier }
+    let identifier: String
+    let title: String
     let caption: String?
     let url: String?
     let imageURL: String?
 
     var customImageURL: URL? {
-        let lowerTitle = (title ?? "").lowercased()
+        let lowerTitle = title.lowercased()
         if lowerTitle.contains("telegram") {
             return URL(string: "https://ashtemobile.site/img/t.png")
         } else if lowerTitle.contains("instagram") {
@@ -77,14 +81,19 @@ struct AshteHomeNewsItem: Codable, Identifiable {
     }
 }
 
-struct AshteHomeAppExtendedInfo: Codable {
-    let id: Int?
-    let subtitle: String?
-    let localizedDescription: String?
-    let versions: [AshteHomeAppVersionData]?
+struct AshteHomeExtraAppInfoResponse: Codable {
+    let apps: [AshteHomeExtraAppInfo]?
 }
 
-struct AshteHomeAppVersionData: Codable {
+struct AshteHomeExtraAppInfo: Codable {
+    let id: Int
+    let subtitle: String?
+    let localizedDescription: String?
+    let versions: [AshteAppVersionInfo]?
+}
+
+struct AshteAppVersionInfo: Codable {
+    let version: String?
     let date: String?
     let minOSVersion: String?
 }
@@ -92,8 +101,7 @@ struct AshteHomeAppVersionData: Codable {
 // MARK: - Main View
 struct HomeView: View {
     @State private var appsList: [AshteHomeAppModel] = []
-    @State private var newsList: [AshteHomeNewsItem] = []
-    @State private var extendedAppInfo: [Int: AshteHomeAppExtendedInfo] = [:]
+    @State private var newsList: [AshteHomeNewsModel] = []
     @State private var searchText = ""
     
     @State private var _selectedInstallAppPresenting: AnyApp?
@@ -111,7 +119,7 @@ struct HomeView: View {
     var body: some View {
         NBNavigationView(.localized("Discover")) {
             List {
-                // MARK: - Banner Slider
+                // MARK: - Banner Slider (News & Socials)
                 if !newsList.isEmpty && searchText.isEmpty {
                     Section {
                         TabView {
@@ -130,16 +138,15 @@ struct HomeView: View {
                                         }
                                     }
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: 190)
                                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                    .padding(.horizontal, 16)
+                                    .padding(.horizontal, 20)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .always))
-                        .frame(height: 220)
-                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 0, trailing: 0))
+                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .always))
+                        .frame(height: 190)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
                         .listRowBackground(Color.clear)
                     }
                 }
@@ -151,7 +158,7 @@ struct HomeView: View {
                         secondary: filteredApps.count.description
                     ) {
                         ForEach(filteredApps) { app in
-                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign, extendedInfo: extendedAppInfo[app.idNumber])) {
+                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
                                 AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
                                     .padding(.vertical, 6)
                             }
@@ -194,6 +201,7 @@ struct HomeView: View {
             
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
+                print("No imported app found")
                 return
             }
             
@@ -216,6 +224,8 @@ struct HomeView: View {
                             Storage.shared.deleteApp(for: importedApp)
                         }
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                    } else {
+                        print("Signing Error: \(String(describing: error))")
                     }
                 }
             }
@@ -229,28 +239,20 @@ struct HomeView: View {
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
             
-            // 1. Parsing Original Data Safely
+            // خوێندنەوەی داتاکان بە شێوەیەکی سەلامەت
             let decoded = try JSONDecoder().decode(AshteHomeAppResponse.self, from: data)
-            
-            // 2. Parsing Extended Data Safely
-            var tempNews: [AshteHomeNewsItem] = []
-            var tempExtendedInfo: [Int: AshteHomeAppExtendedInfo] = [:]
-            
-            if let extraDecoded = try? JSONDecoder().decode(AshteHomeExtraResponse.self, from: data) {
-                tempNews = extraDecoded.news ?? []
-                if let extApps = extraDecoded.apps {
-                    for ext in extApps {
-                        if let id = ext.id {
-                            tempExtendedInfo[id] = ext
-                        }
-                    }
-                }
-            }
+            let newsDecoded = try? JSONDecoder().decode(AshteHomeNewsResponse.self, from: data)
+            let extraDecoded = try? JSONDecoder().decode(AshteHomeExtraAppInfoResponse.self, from: data)
             
             DispatchQueue.main.async {
                 self.appsList = decoded.apps
-                self.newsList = tempNews
-                self.extendedAppInfo = tempExtendedInfo
+                self.newsList = newsDecoded?.news ?? []
+                
+                if let extraApps = extraDecoded?.apps {
+                    for extra in extraApps {
+                        AshteDataManager.shared.extraInfo[extra.id] = extra
+                    }
+                }
             }
         } catch {
             print("Error loading apps: \(error)")
@@ -258,15 +260,19 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Empty State View
+// MARK: - Empty State View (Original)
 struct AshteHomeEmptyView: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "square.grid.3x3.slash.fill")
-                .font(.system(size: 50))
-                .foregroundColor(.blue)
+        if #available(iOS 17, *) {
+            ContentUnavailableView {
+                Label(.localized("No Applications"), systemImage: "square.grid.3x3.slash.fill")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundColor(.purple)
+            } description: {
+                Text(.localized("Check your connection or refresh to load apps."))
+            }
+        } else {
             Text("No Applications")
-                .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.secondary)
         }
     }
@@ -395,7 +401,6 @@ struct AshteHomeAppCell: View {
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
-    var extendedInfo: AshteHomeAppExtendedInfo? = nil // Optional default بۆ ئەوەی لە فایلەکانی تر کێشە دروست نەکات
     
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject private var downloadManager = DownloadManager.shared
@@ -435,15 +440,6 @@ struct AshteHomeAppDetailView: View {
                                     .clipShape(Circle())
                             }
                             Spacer()
-                            
-                            Button(action: {}) {
-                                Image(systemName: "heart")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 36, height: 36)
-                                    .background(Color.black.opacity(0.4))
-                                    .clipShape(Circle())
-                            }
                             
                             Button(action: {}) {
                                 Image(systemName: "square.and.arrow.up")
@@ -578,11 +574,13 @@ struct AshteHomeAppDetailView: View {
                     .padding(.top, 10)
                     
                     // Description
+                    let extraInfo = AshteDataManager.shared.extraInfo[app.idNumber]
+                    
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Description")
                             .font(.system(size: 20, weight: .bold))
                         
-                        Text(extendedInfo?.localizedDescription ?? extendedInfo?.subtitle ?? "No description provided.")
+                        Text(extraInfo?.localizedDescription ?? extraInfo?.subtitle ?? "No description provided.")
                             .font(.system(size: 15, weight: .regular))
                             .foregroundColor(.primary.opacity(0.9))
                             .lineSpacing(4)
@@ -601,7 +599,7 @@ struct AshteHomeAppDetailView: View {
                         
                         AshteDetailInfoRowItem(title: "Developer", value: app.developerName ?? "AshteMobile")
                         
-                        if let updatedDate = extendedInfo?.versions?.first?.date {
+                        if let updatedDate = extraInfo?.versions?.first?.date {
                             let formattedDate = String(updatedDate.prefix(10))
                             AshteDetailInfoRowItem(title: "Updated", value: formattedDate)
                         } else {
@@ -609,7 +607,7 @@ struct AshteHomeAppDetailView: View {
                         }
                         
                         AshteDetailInfoRowItem(title: "Identifier", value: app.bundleIdentifier ?? "Unknown")
-                        AshteDetailInfoRowItem(title: "Minimum iOS", value: extendedInfo?.versions?.first?.minOSVersion ?? "14.0")
+                        AshteDetailInfoRowItem(title: "Minimum iOS", value: extraInfo?.versions?.first?.minOSVersion ?? "14.0")
                         AshteDetailInfoRowItem(title: "Languages", value: "EN, AR, KU", hideDivider: true)
                     }
                     .padding(.horizontal, 20)
