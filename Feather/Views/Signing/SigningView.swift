@@ -235,6 +235,7 @@ extension SigningView {
                     } label: {
                         HStack(spacing: 16) {
                             
+                            // گۆڕانکارییە گەورەکە لێرەدایە: ئایکۆنێکی زۆر مۆدێرن و گەورەتر
                             ZStack {
                                 LinearGradient(
                                     colors: [Color(hex: "#baf2d1"), Color(hex: "#e2f9eb")],
@@ -243,27 +244,27 @@ extension SigningView {
                                 )
                                 
                                 Image(systemName: "checkmark.seal.fill")
-                                    .foregroundColor(Color(hex: "#15a84e"))
-                                    .font(.system(size: 28, weight: .bold))
+                                    .foregroundColor(Color(hex: "#15a84e")) // سەوزێکی تۆخ و شاز
+                                    .font(.system(size: 28, weight: .bold)) // گەورەتر و ئەستوورتر کرا
                             }
-                            .frame(width: 60, height: 60)
+                            .frame(width: 60, height: 60) // قەبارەکەی گەورەتر کرا
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: Color.green.opacity(0.2), radius: 6, x: 0, y: 3)
+                            .shadow(color: Color.green.opacity(0.2), radius: 6, x: 0, y: 3) // سێبەرێکی نەرم
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                                    .stroke(Color.white.opacity(0.7), lineWidth: 1) // هێڵێکی سپی بۆ جوانی
                             )
                             
                             CertificatesCellView(cert: cert)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, 4) // بۆشایی زیاتر بۆ هەناسەدان
                             
                             Image(systemName: "chevron.right")
                                 .foregroundColor(Color(UIColor.tertiaryLabel))
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 16) // گەورەکردنی کاردی بڕوانامەکە
                     }
                     .buttonStyle(PlainButtonStyle())
                 } else {
