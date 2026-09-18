@@ -12,7 +12,7 @@ import Foundation
 import UIKit
 import Combine
 import CoreData
-import AudioToolbox // 🔔 ئەمە زیادکراوە بۆ کارپێکردنی دەنگەکە
+import AudioToolbox 
 
 // MARK: - Models
 struct AshteHomeAppResponse: Codable {
@@ -31,7 +31,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     let developerName: String?
     let bundleIdentifier: String?
     let download_url: String
-    let descriptionText: String? // Added for detail view
+    let descriptionText: String? 
     
     var stringID: String {
         return "\(idNumber)"
@@ -265,8 +265,10 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - App Cell View
+// MARK: - App Cell View (ئەم بەشە نوێکراوەتەوە بۆ ئەوەی لە دیزاینی SourceAppsCellView بچێت)
 struct AshteHomeAppCell: View {
+    @AppStorage("AshteMobile.storeCellAppearance") private var _storeCellAppearance: Int = 0
+    
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
     
@@ -276,60 +278,75 @@ struct AshteHomeAppCell: View {
     @State private var isDownloading = false
 
     var body: some View {
-        HStack(spacing: 16) {
-            AsyncImage(url: app.fullImageURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Color(UIColor.secondarySystemBackground)
-            }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
-            )
-            
-            VStack(alignment: .leading, spacing: 5) {
-                Text(app.name)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                // Icon
+                AsyncImage(url: app.fullImageURL) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Color(UIColor.secondarySystemBackground)
+                }
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
+                )
                 
-                Text("\(app.version ?? "1.0") • \(app.category ?? "Apps")")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-            
-            Spacer()
-            
-            ZStack {
-                if let currentDownload = downloadManager.getDownload(by: app.stringID) {
-                    ZStack {
-                        Circle()
-                            .trim(from: 0, to: downloadProgress)
-                            .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                            .frame(width: 30, height: 30)
-                            .animation(.smooth, value: downloadProgress)
+                // Title and Subtitle
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(app.name)
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    Text(appDescription())
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                // Download Button
+                ZStack {
+                    if let currentDownload = downloadManager.getDownload(by: app.stringID) {
+                        ZStack {
+                            Circle()
+                                .trim(from: 0, to: downloadProgress)
+                                .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                                .frame(width: 30, height: 30)
+                                .animation(.smooth, value: downloadProgress)
 
-                        Image(systemName: "stop.fill")
-                            .foregroundStyle(.blue)
-                            .font(.system(size: 10, weight: .black))
-                    }
-                    .onTapGesture {
-                        downloadManager.cancelDownload(currentDownload)
-                    }
-                } else {
-                    Button(action: { triggerDownload() }) {
-                        Text("Get")
-                            .font(.system(size: 15, weight: .bold))
-                            .frame(width: 72, height: 32)
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
-                            .clipShape(Capsule())
+                            Image(systemName: "stop.fill")
+                                .foregroundStyle(.blue)
+                                .font(.system(size: 10, weight: .black))
+                        }
+                        .onTapGesture {
+                            downloadManager.cancelDownload(currentDownload)
+                        }
+                    } else {
+                        Button(action: { triggerDownload() }) {
+                            Text("Get")
+                                .font(.system(size: 15, weight: .bold))
+                                .frame(width: 72, height: 32)
+                                .background(Color.blue.opacity(0.1))
+                                .foregroundColor(.blue)
+                                .clipShape(Capsule())
+                        }
                     }
                 }
+            }
+            
+            // App Description (پشت دەبەستێت بە هەڵبژاردەی بەکارهێنەر)
+            if _storeCellAppearance != 0, let desc = app.descriptionText {
+                Text(desc)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .padding(.top, 2)
             }
         }
         .onAppear(perform: setupObserver)
@@ -343,13 +360,29 @@ struct AshteHomeAppCell: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                // 🔔 زەنگ و لەرزین لێرە زیادکراوە کاتێک دەگاتە 100%
                 AudioServicesPlaySystemSound(1300)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 
                 onDownloadComplete()
             }
         }
+    }
+    
+    // فەنکشنی ڕێکخستنی وەسف و ڤێرژن وەکو SourceAppsCellView
+    private func appDescription() -> String {
+        let optionalComponents: [String?] = [
+            app.version,
+            app.category ?? "Apps"
+        ]
+        
+        let components: [String] = optionalComponents.compactMap { value in
+            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+                return nil
+            }
+            return trimmed
+        }
+        
+        return components.joined(separator: " • ")
     }
     
     private func triggerDownload() {
@@ -566,7 +599,6 @@ struct AshteHomeAppDetailView: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                // 🔔 زەنگ و لەرزین لێرەش بۆ پەنجەرەی ناوەوە زیادکراوە کاتێک دەگاتە 100%
                 AudioServicesPlaySystemSound(1300)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 
