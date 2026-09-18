@@ -10,7 +10,8 @@ import NimbleViews
 import AltSourceKit
 import Foundation
 import UIKit
-import Combine // پێویستە بۆ چاودێریکردنی داونلۆد
+import Combine
+import CoreData // زیادکرا بۆ هێنانی داتای ئەپە واژووکراوەکان
 
 // MARK: - Models
 struct AshteHomeAppResponse: Codable {
@@ -54,6 +55,15 @@ struct AshteHomeAppModel: Codable, Identifiable {
 struct HomeView: View {
     @State private var appsList: [AshteHomeAppModel] = []
     @State private var searchText = ""
+    
+    // زیادکرا بۆ هێنانی پەنجەرەی ئینستاڵ لە Home
+    @State private var _selectedInstallAppPresenting: AnyApp?
+    
+    @FetchRequest(
+        entity: Signed.entity(),
+        sortDescriptors: [NSSortDescriptor(keyPath: \Signed.date, ascending: false)],
+        animation: .snappy
+    ) private var _signedApps: FetchedResults<Signed>
     
     private var filteredApps: [AshteHomeAppModel] {
         appsList.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
@@ -125,6 +135,20 @@ struct HomeView: View {
             .refreshable {
                 await loadRemoteApps()
             }
+            // پەنجەرەی ئینستاڵ زیادکرا بۆ شاشەی Home
+            .sheet(item: $_selectedInstallAppPresenting) { app in
+                InstallPreviewView(app: app.base, isSharing: app.archive)
+                    .presentationDetents([.height(200)])
+                    .presentationDragIndicator(.visible)
+            }
+            // وەرگرتنی نۆتیفیکەیشنەکە و دەرخستنی پەنجەرەکە ڕاستەوخۆ پاش داونلۆد
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AshteMobile.installApp"))) { _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    if let latest = _signedApps.first {
+                        _selectedInstallAppPresenting = AnyApp(base: latest)
+                    }
+                }
+            }
         }
         .task {
             await loadRemoteApps()
@@ -165,7 +189,7 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - App Cell View (ئێرە نوێکراوەتەوە بۆ چاودێریکردنی ئۆتۆماتیکی)
+// MARK: - App Cell View
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
     
@@ -198,7 +222,6 @@ struct AshteHomeAppCell: View {
             
             Spacer()
             
-            // پیشاندانی دوگمەی Get یان هێڵکاری داونلۆد
             ZStack {
                 if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                     ZStack {
@@ -241,14 +264,13 @@ struct AshteHomeAppCell: View {
     private func triggerDownload() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
-        hasTriggeredInstall = false // سفرکردنەوەی باری ئینستاڵ
+        hasTriggeredInstall = false
         
         if let dlURL = app.downloadURLObject {
             _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
         }
     }
     
-    // ئێرە کرۆکی جادوەکەیە: چاودێری هێڵکاری دەکات و نۆتیفیکەیشن دەنێرێت
     private func setupObserver() {
         cancellable?.cancel()
         guard let download = downloadManager.getDownload(by: app.stringID) else {
@@ -265,10 +287,10 @@ struct AshteHomeAppCell: View {
         cancellable = publisher.sink { _, _ in
             downloadProgress = download.overallProgress
             
-            // کاتێک داونلۆد و واژووکردن تەواو دەبێت (دەگاتە 1.0) بە ئۆتۆماتیکی فەرمانی ئینستاڵ دەنێرێت
+            // چاودێری کۆتایی: کە گەیشتە ١٠٠٪ و واژوو کرا، پاش کەمێک دواخستن پەنجەرەکە دەهێنێت
             if downloadProgress >= 1.0 && !hasTriggeredInstall {
                 hasTriggeredInstall = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                     NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
                 }
             }
@@ -281,7 +303,6 @@ struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
     @Environment(\.presentationMode) var presentationMode
     
-    // هەمان لۆژیکی ئۆتۆماتیکی بۆ ناو پەڕەی وردەکاریش
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
     @State private var cancellable: AnyCancellable?
@@ -421,7 +442,7 @@ struct AshteHomeAppDetailView: View {
             
             if downloadProgress >= 1.0 && !hasTriggeredInstall {
                 hasTriggeredInstall = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                     NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
                 }
             }
