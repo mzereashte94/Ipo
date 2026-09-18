@@ -235,7 +235,6 @@ extension SigningView {
                     } label: {
                         HStack(spacing: 16) {
                             
-                            // گۆڕانکارییە گەورەکە لێرەدایە: ئایکۆنێکی زۆر مۆدێرن و گەورەتر
                             ZStack {
                                 LinearGradient(
                                     colors: [Color(hex: "#baf2d1"), Color(hex: "#e2f9eb")],
@@ -244,27 +243,27 @@ extension SigningView {
                                 )
                                 
                                 Image(systemName: "checkmark.seal.fill")
-                                    .foregroundColor(Color(hex: "#15a84e")) // سەوزێکی تۆخ و شاز
-                                    .font(.system(size: 28, weight: .bold)) // گەورەتر و ئەستوورتر کرا
+                                    .foregroundColor(Color(hex: "#15a84e"))
+                                    .font(.system(size: 28, weight: .bold))
                             }
-                            .frame(width: 60, height: 60) // قەبارەکەی گەورەتر کرا
+                            .frame(width: 60, height: 60)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: Color.green.opacity(0.2), radius: 6, x: 0, y: 3) // سێبەرێکی نەرم
+                            .shadow(color: Color.green.opacity(0.2), radius: 6, x: 0, y: 3)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.white.opacity(0.7), lineWidth: 1) // هێڵێکی سپی بۆ جوانی
+                                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
                             )
                             
                             CertificatesCellView(cert: cert)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 4) // بۆشایی زیاتر بۆ هەناسەدان
+                                .padding(.vertical, 4)
                             
                             Image(systemName: "chevron.right")
                                 .foregroundColor(Color(UIColor.tertiaryLabel))
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 16) // گەورەکردنی کاردی بڕوانامەکە
+                        .padding(.vertical, 16)
                     }
                     .buttonStyle(PlainButtonStyle())
                 } else {
@@ -401,11 +400,11 @@ extension SigningView {
                     Storage.shared.deleteApp(for: app)
                 }
                 
-                if _temporaryOptions.post_installAppAfterSigned {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
-                    }
+                // 💡 نۆتیفیکەیشنی ئینستاڵ کرا بە ئۆتۆماتیکی و بێ مەرج
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
                 }
+                
                 dismiss()
             }
         }
