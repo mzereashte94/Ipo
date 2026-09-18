@@ -24,16 +24,17 @@ struct AshteHomeNewsModel: Codable, Identifiable {
     var id: String { identifier }
     let identifier: String
     let title: String
-    let caption: String
+    let caption: String?
     let url: String
     let imageURL: String?
     let tintColor: String?
 
-    // 💡 بەکارهێنانی ئەو لینکانەی کە خۆت داوات کردبوو بە پێی ناوی هەواڵەکە
+    // 💡 دانانی لۆگۆی تایبەت بۆ تێلیگرام و ئینستاگرام بەپێی داواکارییەکەت
     var customImageURL: URL? {
-        if title.lowercased().contains("telegram") {
+        let lowerTitle = title.lowercased()
+        if lowerTitle.contains("telegram") {
             return URL(string: "https://ashtemobile.site/img/t.png")
-        } else if title.lowercased().contains("instagram") {
+        } else if lowerTitle.contains("instagram") {
             return URL(string: "https://ashtemobile.site/img/i.png")
         }
         guard let img = imageURL else { return nil }
@@ -47,41 +48,46 @@ struct AshteAppVersionInfo: Codable {
     let minOSVersion: String?
 }
 
+// 💡 گەڕاندنەوەی پێکهاتەی ئەپەکە بۆ شێوازە بنەڕەتییەکەی خۆت بۆ ئەوەی ئێرۆر لە پڕۆژەکەت دروست نەکات
 struct AshteHomeAppModel: Codable, Identifiable {
-    var id: Int { idNumber ?? 0 }
-    let idNumber: Int?
+    var id: Int { idNumber }
+    let idNumber: Int
     let name: String
     let version: String?
-    let size: String?
-    let icon: String?
-    let iconURL: String?
-    let type: String?
     let category: String?
+    let iconURL: String?
+    let size: String?
     let developerName: String?
+    let bundleIdentifier: String?
+    let download_url: String
+    
+    // زیادکراوەکان بۆ پەڕەی ناوەوەی ئەپەکان
+    let icon: String?
+    let type: String?
     let subtitle: String?
     let localizedDescription: String?
-    let bundleIdentifier: String?
-    let download_url: String?
     let versions: [AshteAppVersionInfo]?
     
     var stringID: String {
-        return "\(idNumber ?? 0)"
+        return "\(idNumber)"
     }
     
     var downloadURLObject: URL? {
-        guard let dl = download_url else { return nil }
-        return URL(string: dl)
+        return URL(string: download_url)
     }
     
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
-        case name, version, size, icon, iconURL, type, category, developerName, subtitle, localizedDescription, bundleIdentifier, download_url, versions
+        case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url
+        case icon, type, subtitle, localizedDescription, versions
     }
 
     var fullImageURL: URL? {
-        if let img = iconURL, img.hasPrefix("http") {
-            return URL(string: img)
-        } else if let img = icon {
+        if let img = iconURL, !img.isEmpty {
+            if img.hasPrefix("http") { return URL(string: img) }
+            return URL(string: "https://ashtemobile.site/\(img)")
+        } else if let img = icon, !img.isEmpty {
+            if img.hasPrefix("http") { return URL(string: img) }
             return URL(string: "https://ashtemobile.site/\(img)")
         }
         return nil
@@ -111,9 +117,9 @@ struct HomeView: View {
     }
     
     var body: some View {
-        NBNavigationView(.localized("Home")) {
+        NBNavigationView(.localized("Discover")) {
             List {
-                // MARK: - Banner Slider
+                // MARK: - Banner Slider (News/Social)
                 if !newsList.isEmpty && searchText.isEmpty {
                     Section {
                         TabView {
@@ -285,7 +291,7 @@ struct AshteHomeAppCell: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text("\(app.version ?? "1.0") • \(app.subtitle ?? app.developerName ?? "")")
+                Text("\(app.version ?? "1.0") • \(app.subtitle ?? app.developerName ?? "AshteMobile")")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -451,7 +457,8 @@ struct AshteHomeAppDetailView: View {
                                 .foregroundColor(.secondary)
                             
                             HStack(spacing: 2) {
-                                ForEach(0..<5) { _ in
+                                // 💡 چارەسەری ئێرۆری ForEach کراوە لێرەدا
+                                ForEach(0..<5, id: \.self) { _ in
                                     Image(systemName: "star.fill")
                                         .font(.system(size: 12))
                                         .foregroundColor(.yellow)
