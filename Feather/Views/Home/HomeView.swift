@@ -344,7 +344,7 @@ struct AshteHomeAppCell: View {
                 isDownloading = false
                 
                 // 🔔 زەنگ و لەرزین لێرە زیادکراوە کاتێک دەگاتە 100%
-                AudioServicesPlaySystemSound(1052)
+                AudioServicesPlaySystemSound(1035)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 
                 onDownloadComplete()
@@ -567,7 +567,7 @@ struct AshteHomeAppDetailView: View {
                 isDownloading = false
                 
                 // 🔔 زەنگ و لەرزین لێرەش بۆ پەنجەرەی ناوەوە زیادکراوە کاتێک دەگاتە 100%
-                AudioServicesPlaySystemSound(1052)
+                AudioServicesPlaySystemSound(1035)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 
                 onDownloadComplete()
