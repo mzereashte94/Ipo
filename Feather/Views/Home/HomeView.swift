@@ -30,6 +30,8 @@ struct AshteHomeAppModel: Codable, Identifiable {
     let developerName: String?
     let bundleIdentifier: String?
     let download_url: String
+    let description: String?
+    let screenshots: [String]?
     
     var stringID: String {
         return "\(idNumber)"
@@ -41,7 +43,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
-        case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url
+        case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url, description, screenshots
     }
 
     var fullImageURL: URL? {
@@ -150,7 +152,6 @@ struct HomeView: View {
         }
     }
     
-    // 💡 چارەسەری قایم: وەرگرتنی ڕاستەوخۆی کۆتا ئەپی داونلۆدکراو بێ پێویستبوون بە پشکنینی ناو
     private func handleAutoSign() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
@@ -158,7 +159,6 @@ struct HomeView: View {
             
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
-                print("No imported app found")
                 return
             }
             
@@ -181,8 +181,6 @@ struct HomeView: View {
                             Storage.shared.deleteApp(for: importedApp)
                         }
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
-                    } else {
-                        print("Signing Error: \(String(describing: error))")
                     }
                 }
             }
@@ -250,9 +248,10 @@ struct AshteHomeAppCell: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text("\(app.version ?? "1.0") • \(app.developerName ?? "AshteMobile")")
+                Text("\(app.size ?? "10 MB") • \(app.description?.components(separatedBy: "\n").first ?? app.developerName ?? "AshteMobile")")
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
             
             Spacer()
@@ -343,31 +342,8 @@ struct AshteHomeAppDetailView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                ZStack(alignment: .topLeading) {
-                    AsyncImage(url: app.fullImageURL) { image in
-                        image.resizable().aspectRatio(contentMode: .fill).blur(radius: 30)
-                    } placeholder: {
-                        Color.purple.opacity(0.6)
-                    }
-                    .frame(height: 240)
-                    .clipped()
-                    
-                    HStack {
-                        Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 40, height: 40)
-                                .background(Color.black.opacity(0.3))
-                                .clipShape(Circle())
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 50)
-                }
-                
+            VStack(alignment: .leading, spacing: 20) {
+                // سەرەوە: ئایکۆن، ناو و دوگمەی Get
                 HStack(alignment: .center, spacing: 16) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -377,74 +353,92 @@ struct AshteHomeAppDetailView: View {
                     .frame(width: 90, height: 90)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
-                    .offset(y: -25)
-                    .padding(.bottom, -25)
                     
                     VStack(alignment: .leading, spacing: 6) {
                         Text(app.name)
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundColor(.primary)
+                            .lineLimit(2)
                         
-                        Text(app.developerName ?? "AshteMobile")
+                        Text(app.category ?? "Games")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.secondary)
+                        
+                        ZStack {
+                            if let currentDownload = downloadManager.getDownload(by: app.stringID) {
+                                HStack {
+                                    Text("Downloading...")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.purple)
+                                    ProgressView()
+                                }
+                            } else {
+                                Button(action: { triggerDownload() }) {
+                                    Text(isDownloading ? "..." : "Get")
+                                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+                                        .frame(width: 90, height: 32)
+                                        .background(Color.purple)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
                     }
-                    
                     Spacer()
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 
-                ZStack {
-                    if let currentDownload = downloadManager.getDownload(by: app.stringID) {
-                        ZStack {
-                            Capsule().fill(Color.purple.opacity(0.12))
-                            HStack {
-                                Text("Downloading...")
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                                    .foregroundColor(.purple)
-                                Spacer()
-                                ProgressView()
-                            }
-                            .padding(.horizontal, 20)
-                        }
-                        .frame(width: 160, height: 38)
-                    } else {
-                        Button(action: { triggerDownload() }) {
-                            Text(isDownloading ? "..." : "Get")
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                                .frame(width: 110, height: 38)
-                                .background(Color.purple)
-                                .clipShape(Capsule())
-                        }
+                // قەبارەی ئەپەکە
+                HStack {
+                    Spacer()
+                    VStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill").foregroundColor(.purple)
+                        Text(app.size ?? "253.4 MB")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
                     }
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 126)
-                .padding(.top, 5)
+                .padding(.vertical, 10)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, 20)
                 
+                // بەشی Description (وەسف)
+                if let desc = app.description, !desc.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Description")
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(.primary)
+                        
+                        Text(desc)
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 20)
+                }
+                
+                // بەشی Information (زانیارییەکان)
                 VStack(alignment: .leading, spacing: 15) {
                     Text("Information")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .padding(.top, 20)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .padding(.top, 10)
                     
-                    AshteHomeInfoRow(title: "Version", value: app.version ?? "1.0")
-                    AshteHomeInfoRow(title: "Category", value: app.category ?? "Apps")
                     AshteHomeInfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
                     AshteHomeInfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile")
+                    AshteHomeInfoRow(title: "Version", value: app.version ?? "1.0")
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
             }
         }
-        .edgesIgnoringSafeArea(.top)
-        .navigationBarHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
         .onChange(of: downloadManager.downloads.count) { _ in
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
-            
             if isCurrentlyDownloading {
                 isDownloading = true
                 setupObserver()
