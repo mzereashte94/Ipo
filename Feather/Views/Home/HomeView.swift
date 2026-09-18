@@ -10,8 +10,9 @@ import NimbleViews
 import AltSourceKit
 import Foundation
 import UIKit
+import Combine // پێویستە بۆ چاودێریکردنی داونلۆد
 
-// MARK: - Models (ناوەکانم گۆڕیوە بۆ ئەوەی ئیرۆر نەدات)
+// MARK: - Models
 struct AshteHomeAppResponse: Codable {
     let name: String?
     let apps: [AshteHomeAppModel]
@@ -146,7 +147,7 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Subviews (ناوەکان گۆڕاون بۆ ئەوەی لەگەڵ هیچ شتێکدا تێکەڵ نەبن)
+// MARK: - Empty State View
 struct AshteHomeEmptyView: View {
     var body: some View {
         if #available(iOS 17, *) {
@@ -164,9 +165,15 @@ struct AshteHomeEmptyView: View {
     }
 }
 
+// MARK: - App Cell View (ئێرە نوێکراوەتەوە بۆ چاودێریکردنی ئۆتۆماتیکی)
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
     
+    @ObservedObject private var downloadManager = DownloadManager.shared
+    @State private var downloadProgress: Double = 0
+    @State private var cancellable: AnyCancellable?
+    @State private var hasTriggeredInstall = false
+
     var body: some View {
         HStack(spacing: 15) {
             AsyncImage(url: app.fullImageURL) { image in
@@ -191,34 +198,94 @@ struct AshteHomeAppCell: View {
             
             Spacer()
             
-            Button(action: {
-                triggerDownload()
-            }) {
-                Text("Get")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .frame(width: 68, height: 30)
-                    .background(Color.purple.opacity(0.12))
-                    .foregroundColor(.purple)
-                    .clipShape(Capsule())
+            // پیشاندانی دوگمەی Get یان هێڵکاری داونلۆد
+            ZStack {
+                if let currentDownload = downloadManager.getDownload(by: app.stringID) {
+                    ZStack {
+                        Circle()
+                            .trim(from: 0, to: downloadProgress)
+                            .stroke(Color.purple, style: StrokeStyle(lineWidth: 2.3, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: 31, height: 31)
+                            .animation(.smooth, value: downloadProgress)
+
+                        Image(systemName: downloadProgress >= 0.75 ? "signature" : "square.fill")
+                            .foregroundStyle(.purple)
+                            .font(.footnote).bold()
+                    }
+                    .onTapGesture {
+                        if downloadProgress <= 0.75 {
+                            downloadManager.cancelDownload(currentDownload)
+                        }
+                    }
+                } else {
+                    Button(action: { triggerDownload() }) {
+                        Text("Get")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .frame(width: 68, height: 30)
+                            .background(Color.purple.opacity(0.12))
+                            .foregroundColor(.purple)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
+        }
+        .onAppear(perform: setupObserver)
+        .onDisappear { cancellable?.cancel() }
+        .onChange(of: downloadManager.downloads.description) { _ in
+            setupObserver()
         }
     }
     
-    // فەنکشنی فەرمی داونلۆد کە ڕاستەوخۆ دەچێتە Library
     private func triggerDownload() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
+        hasTriggeredInstall = false // سفرکردنەوەی باری ئینستاڵ
         
         if let dlURL = app.downloadURLObject {
             _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
         }
     }
+    
+    // ئێرە کرۆکی جادوەکەیە: چاودێری هێڵکاری دەکات و نۆتیفیکەیشن دەنێرێت
+    private func setupObserver() {
+        cancellable?.cancel()
+        guard let download = downloadManager.getDownload(by: app.stringID) else {
+            downloadProgress = 0
+            return
+        }
+        downloadProgress = download.overallProgress
+
+        let publisher = Publishers.CombineLatest(
+            download.$progress,
+            download.$unpackageProgress
+        )
+
+        cancellable = publisher.sink { _, _ in
+            downloadProgress = download.overallProgress
+            
+            // کاتێک داونلۆد و واژووکردن تەواو دەبێت (دەگاتە 1.0) بە ئۆتۆماتیکی فەرمانی ئینستاڵ دەنێرێت
+            if downloadProgress >= 1.0 && !hasTriggeredInstall {
+                hasTriggeredInstall = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                }
+            }
+        }
+    }
 }
 
+// MARK: - App Detail View
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
     @Environment(\.presentationMode) var presentationMode
+    
+    // هەمان لۆژیکی ئۆتۆماتیکی بۆ ناو پەڕەی وردەکاریش
+    @ObservedObject private var downloadManager = DownloadManager.shared
+    @State private var downloadProgress: Double = 0
+    @State private var cancellable: AnyCancellable?
+    @State private var hasTriggeredInstall = false
     
     var body: some View {
         ScrollView {
@@ -274,13 +341,30 @@ struct AshteHomeAppDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 
-                Button(action: { triggerDownload() }) {
-                    Text("Get")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .frame(width: 110, height: 38)
-                        .background(Color.purple)
-                        .clipShape(Capsule())
+                ZStack {
+                    if let currentDownload = downloadManager.getDownload(by: app.stringID) {
+                        ZStack {
+                            Capsule().fill(Color.purple.opacity(0.12))
+                            HStack {
+                                Text("Signing...")
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .foregroundColor(.purple)
+                                Spacer()
+                                ProgressView()
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                        .frame(width: 150, height: 38)
+                    } else {
+                        Button(action: { triggerDownload() }) {
+                            Text("Get")
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                                .frame(width: 110, height: 38)
+                                .background(Color.purple)
+                                .clipShape(Capsule())
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 126)
@@ -302,14 +386,45 @@ struct AshteHomeAppDetailView: View {
         }
         .edgesIgnoringSafeArea(.top)
         .navigationBarHidden(true)
+        .onAppear(perform: setupObserver)
+        .onDisappear { cancellable?.cancel() }
+        .onChange(of: downloadManager.downloads.description) { _ in
+            setupObserver()
+        }
     }
     
     private func triggerDownload() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
+        hasTriggeredInstall = false
         
         if let dlURL = app.downloadURLObject {
             _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
+        }
+    }
+    
+    private func setupObserver() {
+        cancellable?.cancel()
+        guard let download = downloadManager.getDownload(by: app.stringID) else {
+            downloadProgress = 0
+            return
+        }
+        downloadProgress = download.overallProgress
+
+        let publisher = Publishers.CombineLatest(
+            download.$progress,
+            download.$unpackageProgress
+        )
+
+        cancellable = publisher.sink { _, _ in
+            downloadProgress = download.overallProgress
+            
+            if downloadProgress >= 1.0 && !hasTriggeredInstall {
+                hasTriggeredInstall = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                }
+            }
         }
     }
 }
