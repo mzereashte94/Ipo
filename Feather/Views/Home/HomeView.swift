@@ -8,11 +8,9 @@
 import SwiftUI
 import NimbleViews
 import AltSourceKit
-import Foundation
 import UIKit
 import Combine
 import CoreData
-import AudioToolbox // 🔔 ئەمە زیادکراوە بۆ کارپێکردنی دەنگەکە
 
 // MARK: - Models
 struct AshteHomeAppResponse: Codable {
@@ -31,7 +29,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     let developerName: String?
     let bundleIdentifier: String?
     let download_url: String
-    let descriptionText: String? // Added for detail view
+    let descriptionText: String?
     
     var stringID: String {
         return "\(idNumber)"
@@ -112,7 +110,6 @@ struct HomeView: View {
                                     }
                                     .frame(height: 180)
                                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                    .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 3)
                                     .padding(.horizontal, 20)
                                 }
                             }
@@ -194,7 +191,6 @@ struct HomeView: View {
             
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
-                print("No imported app found")
                 return
             }
             
@@ -217,8 +213,6 @@ struct HomeView: View {
                             Storage.shared.deleteApp(for: importedApp)
                         }
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
-                    } else {
-                        print("Signing Error: \(String(describing: error))")
                     }
                 }
             }
@@ -248,7 +242,7 @@ struct AshteHomeEmptyView: View {
             ContentUnavailableView {
                 Label(.localized("No Applications"), systemImage: "magnifyingglass")
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundColor(.blue)
+                    .foregroundColor(.accentColor)
             } description: {
                 Text(.localized("We couldn't find any apps matching your search."))
             }
@@ -265,7 +259,7 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - App Cell View (ڕێکخراوەتەوە وەکو SourceAppsCellView)
+// MARK: - App Cell View
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
@@ -277,7 +271,6 @@ struct AshteHomeAppCell: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // 💡 ئایکۆنەکە بە هەمان قەبارە و ستایلی FRIconCellView ڕێکخراوە
             AsyncImage(url: app.fullImageURL) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
@@ -290,7 +283,6 @@ struct AshteHomeAppCell: View {
                     .stroke(Color.black.opacity(0.08), lineWidth: 1 / UIScreen.main.scale)
             )
             
-            // 💡 ناو و وەسفەکە بە هەمان فۆنتی سەرەکی
             VStack(alignment: .leading, spacing: 3) {
                 Text(app.name)
                     .font(.system(size: 17, weight: .semibold))
@@ -305,7 +297,6 @@ struct AshteHomeAppCell: View {
             
             Spacer()
             
-            // 💡 دوگمەی Get ڕێک بە شێوەی DownloadButtonView
             ZStack {
                 if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                     ZStack {
@@ -325,7 +316,6 @@ struct AshteHomeAppCell: View {
                             downloadManager.cancelDownload(currentDownload)
                         }
                     }
-                    .compatTransition()
                 } else {
                     Button(action: { triggerDownload() }) {
                         Text("Get")
@@ -338,7 +328,6 @@ struct AshteHomeAppCell: View {
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.borderless)
-                    .compatTransition()
                 }
             }
         }
@@ -352,11 +341,8 @@ struct AshteHomeAppCell: View {
                 setupObserver()
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
-                
-                // 🔔 زەنگ و لەرزین لێرە زیادکراوە کاتێک دەگاتە 100%
-                AudioServicesPlaySystemSound(1300)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
                 onDownloadComplete()
             }
         }
@@ -428,7 +414,6 @@ struct AshteHomeAppDetailView: View {
                         Spacer()
                         
                         Button(action: {
-                            // Action for share if needed
                         }) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 17, weight: .bold))
@@ -480,11 +465,11 @@ struct AshteHomeAppDetailView: View {
                     ZStack {
                         if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                             ZStack {
-                                Capsule().fill(Color.blue.opacity(0.1))
+                                Capsule().fill(Color.accentColor.opacity(0.1))
                                 HStack {
                                     Text("Downloading...")
                                         .font(.system(size: 16, weight: .bold, design: .rounded))
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(.accentColor)
                                     Spacer()
                                     ProgressView()
                                 }
@@ -497,20 +482,19 @@ struct AshteHomeAppDetailView: View {
                                     .font(.system(size: 16, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity, minHeight: 44)
-                                    .background(Color.blue)
+                                    .background(Color.accentColor)
                                     .clipShape(Capsule())
                             }
                         }
                     }
                     
                     Button(action: {
-                        // Action for secondary button if needed
                     }) {
                         Text("Share")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(Color.blue)
+                            .background(Color.accentColor)
                             .clipShape(Capsule())
                     }
                 }
@@ -575,11 +559,8 @@ struct AshteHomeAppDetailView: View {
                 setupObserver()
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
-                
-                // 🔔 زەنگ و لەرزین لێرەش بۆ پەنجەرەی ناوەوە زیادکراوە کاتێک دەگاتە 100%
-                AudioServicesPlaySystemSound(1300)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
                 onDownloadComplete()
             }
         }
@@ -622,14 +603,14 @@ struct AshtePillView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.blue)
+                .foregroundColor(.accentColor)
             Text(text)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(Color.blue.opacity(0.1))
+        .background(Color.accentColor.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
@@ -649,15 +630,5 @@ struct AshteDetailInfoRow: View {
                 .foregroundColor(.secondary)
         }
         Divider()
-    }
-}
-
-extension View {
-    func compatTransition() -> some View {
-        if #available(iOS 16.0, *) {
-            return self.transition(.push(from: .bottom))
-        } else {
-            return self.transition(.move(edge: .bottom))
-        }
     }
 }
