@@ -57,9 +57,7 @@ struct HomeView: View {
     @State private var searchText = ""
     
     @State private var _selectedInstallAppPresenting: AnyApp?
-    
-    // گۆڕاوێکی نوێ بۆ چاودێریکردنی ژمارەی بەرنامە واژووکراوەکان لە داتابەیسدا
-    @State private var signedAppsCount: Int = -1 
+    @State private var pendingInstallAppID: String? = nil
     
     @FetchRequest(
         entity: Signed.entity(),
@@ -102,9 +100,7 @@ struct HomeView: View {
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                 }
-                                
                                 Spacer()
-                                
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.secondary.opacity(0.5))
@@ -119,8 +115,8 @@ struct HomeView: View {
                         secondary: filteredApps.count.description
                     ) {
                         ForEach(filteredApps) { app in
-                            NavigationLink(destination: AshteHomeAppDetailView(app: app)) {
-                                AshteHomeAppCell(app: app)
+                            NavigationLink(destination: AshteHomeAppDetailView(app: app, pendingInstallAppID: $pendingInstallAppID)) {
+                                AshteHomeAppCell(app: app, pendingInstallAppID: $pendingInstallAppID)
                                     .padding(.vertical, 4)
                             }
                         }
@@ -137,26 +133,23 @@ struct HomeView: View {
             .refreshable {
                 await loadRemoteApps()
             }
-            // پەنجەرەی ئینستاڵ کە بەسەر شاشەی Home دا دەکرێتەوە
             .sheet(item: $_selectedInstallAppPresenting) { app in
                 InstallPreviewView(app: app.base, isSharing: app.archive)
                     .presentationDetents([.height(200)])
                     .presentationDragIndicator(.visible)
             }
-            // لۆژیکە نوێیەکە: هەرکاتێک داتابەیسەکە ئەپێکی نوێی تێدا سەیڤ بوو، پەنجەرەی ئینستاڵ دەهێنێت
-            .onAppear {
-                signedAppsCount = _signedApps.count
-            }
-            .onChange(of: _signedApps.count) { newCount in
-                if signedAppsCount != -1 && newCount > signedAppsCount {
-                    // بەرنامەکە بە سەرکەوتوویی واژوو کرا و لە داتابەیس سەیڤ بوو!
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        if let latest = _signedApps.first {
-                            _selectedInstallAppPresenting = AnyApp(base: latest)
+            .onChange(of: DownloadManager.shared.downloads.count) { _ in
+                if let pendingID = pendingInstallAppID {
+                    let isStillDownloading = DownloadManager.shared.downloads.contains(where: { $0.id == pendingID })
+                    if !isStillDownloading {
+                        pendingInstallAppID = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            if let latest = _signedApps.first {
+                                _selectedInstallAppPresenting = AnyApp(base: latest)
+                            }
                         }
                     }
                 }
-                signedAppsCount = newCount
             }
         }
         .task {
@@ -201,6 +194,7 @@ struct AshteHomeEmptyView: View {
 // MARK: - App Cell View
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
+    @Binding var pendingInstallAppID: String?
     
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
@@ -273,6 +267,8 @@ struct AshteHomeAppCell: View {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
+        pendingInstallAppID = app.stringID
+        
         if let dlURL = app.downloadURLObject {
             _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
         }
@@ -300,6 +296,7 @@ struct AshteHomeAppCell: View {
 // MARK: - App Detail View
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
+    @Binding var pendingInstallAppID: String?
     @Environment(\.presentationMode) var presentationMode
     
     @ObservedObject private var downloadManager = DownloadManager.shared
@@ -415,6 +412,8 @@ struct AshteHomeAppDetailView: View {
     private func triggerDownload() {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
+        
+        pendingInstallAppID = app.stringID
         
         if let dlURL = app.downloadURLObject {
             _ = DownloadManager.shared.startDownload(from: dlURL, id: app.stringID)
