@@ -17,7 +17,7 @@ import CoreData
 struct AshteHomeAppResponse: Codable {
     let name: String?
     let apps: [AshteHomeAppModel]
-    let news: [AshteHomeNewsModel]? // زیادکرا بۆ خوێندنەوەی هەواڵ/لینكەكان لە JSON
+    let news: [AshteHomeNewsModel]?
 }
 
 struct AshteHomeNewsModel: Codable, Identifiable {
@@ -29,48 +29,73 @@ struct AshteHomeNewsModel: Codable, Identifiable {
     let imageURL: String?
     let tintColor: String?
 
-    var fullImageURL: URL? {
+    // 💡 بەکارهێنانی ئەو لینکانەی کە خۆت داوات کردبوو بە پێی ناوی هەواڵەکە
+    var customImageURL: URL? {
+        if title.lowercased().contains("telegram") {
+            return URL(string: "https://ashtemobile.site/img/t.png")
+        } else if title.lowercased().contains("instagram") {
+            return URL(string: "https://ashtemobile.site/img/i.png")
+        }
         guard let img = imageURL else { return nil }
         return URL(string: img)
     }
 }
 
+struct AshteAppVersionInfo: Codable {
+    let version: String?
+    let date: String?
+    let minOSVersion: String?
+}
+
 struct AshteHomeAppModel: Codable, Identifiable {
-    var id: Int { idNumber }
-    let idNumber: Int
+    var id: Int { idNumber ?? 0 }
+    let idNumber: Int?
     let name: String
     let version: String?
-    let category: String?
-    let iconURL: String?
     let size: String?
+    let icon: String?
+    let iconURL: String?
+    let type: String?
+    let category: String?
     let developerName: String?
+    let subtitle: String?
+    let localizedDescription: String?
     let bundleIdentifier: String?
-    let download_url: String
+    let download_url: String?
+    let versions: [AshteAppVersionInfo]?
     
     var stringID: String {
-        return "\(idNumber)"
+        return "\(idNumber ?? 0)"
     }
     
     var downloadURLObject: URL? {
-        return URL(string: download_url)
+        guard let dl = download_url else { return nil }
+        return URL(string: dl)
     }
     
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
-        case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url
+        case name, version, size, icon, iconURL, type, category, developerName, subtitle, localizedDescription, bundleIdentifier, download_url, versions
     }
 
     var fullImageURL: URL? {
-        guard let img = iconURL else { return nil }
-        if img.hasPrefix("http") { return URL(string: img) }
-        return URL(string: "https://ashtemobile.site/\(img)")
+        if let img = iconURL, img.hasPrefix("http") {
+            return URL(string: img)
+        } else if let img = icon {
+            return URL(string: "https://ashtemobile.site/\(img)")
+        }
+        return nil
+    }
+    
+    var safeCategory: String {
+        return category ?? type ?? "Apps"
     }
 }
 
 // MARK: - Main View
 struct HomeView: View {
     @State private var appsList: [AshteHomeAppModel] = []
-    @State private var newsList: [AshteHomeNewsModel] = [] // لیستی هەواڵەکان
+    @State private var newsList: [AshteHomeNewsModel] = []
     @State private var searchText = ""
     
     @State private var _selectedInstallAppPresenting: AnyApp?
@@ -86,9 +111,9 @@ struct HomeView: View {
     }
     
     var body: some View {
-        NBNavigationView(.localized("Discover")) {
+        NBNavigationView(.localized("Home")) {
             List {
-                // MARK: - Dynamic News Banner (Carousel TabView)
+                // MARK: - Banner Slider
                 if !newsList.isEmpty && searchText.isEmpty {
                     Section {
                         TabView {
@@ -98,50 +123,33 @@ struct HomeView: View {
                                         UIApplication.shared.open(url)
                                     }
                                 }) {
-                                    HStack(spacing: 16) {
-                                        AsyncImage(url: news.fullImageURL) { image in
-                                            image.resizable().aspectRatio(contentMode: .fill)
-                                        } placeholder: {
-                                            ZStack {
-                                                LinearGradient(colors: [Color(red: 138/255, green: 35/255, blue: 135/255), Color(red: 233/255, green: 64/255, blue: 87/255)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                                Image(systemName: "link")
-                                                    .foregroundColor(.white)
-                                            }
+                                    AsyncImage(url: news.customImageURL) { image in
+                                        image.resizable().aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        ZStack {
+                                            Color(UIColor.secondarySystemBackground)
+                                            ProgressView()
                                         }
-                                        .frame(width: 56, height: 56)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                                        
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(news.title)
-                                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                                .foregroundColor(.primary)
-                                            
-                                            Text(news.caption)
-                                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                                .foregroundColor(.secondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "arrow.right.circle.fill")
-                                            .font(.system(size: 22))
-                                            .foregroundColor(.purple.opacity(0.8))
                                     }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 190)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                     .padding(.horizontal, 16)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .never)) // شێوازی تاب/سلایدەر
-                        .frame(height: 80)
-                        .listRowInsets(EdgeInsets()) // پڕکردنەوەی تەواوی لاکان
+                        .tabViewStyle(.page(indexDisplayMode: .always))
+                        .frame(height: 220)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 0, trailing: 0))
+                        .listRowBackground(Color.clear)
                     }
-                    .listRowBackground(Color(UIColor.secondarySystemGroupedBackground))
                 }
                 
                 // MARK: - Applications List
                 if !filteredApps.isEmpty {
                     NBSection(
-                        .localized("Applications"),
+                        .localized("Recently Updated"),
                         secondary: filteredApps.count.description
                     ) {
                         ForEach(filteredApps) { app in
@@ -188,7 +196,6 @@ struct HomeView: View {
             
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
-                print("No imported app found")
                 return
             }
             
@@ -211,8 +218,6 @@ struct HomeView: View {
                             Storage.shared.deleteApp(for: importedApp)
                         }
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
-                    } else {
-                        print("Signing Error: \(String(describing: error))")
                     }
                 }
             }
@@ -228,7 +233,6 @@ struct HomeView: View {
             let decoded = try JSONDecoder().decode(AshteHomeAppResponse.self, from: data)
             DispatchQueue.main.async {
                 self.appsList = decoded.apps
-                // خوێندنەوەی بەشی News بۆ تابەکان
                 self.newsList = decoded.news ?? []
             }
         } catch {
@@ -240,23 +244,13 @@ struct HomeView: View {
 // MARK: - Empty State View
 struct AshteHomeEmptyView: View {
     var body: some View {
-        if #available(iOS 17, *) {
-            ContentUnavailableView {
-                Label(.localized("No Applications"), systemImage: "square.grid.3x3.slash.fill")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundColor(.purple)
-            } description: {
-                Text(.localized("Check your connection or refresh to load apps."))
-            }
-        } else {
-            VStack(spacing: 16) {
-                Image(systemName: "square.grid.3x3.slash.fill")
-                    .font(.system(size: 50))
-                    .foregroundColor(.purple)
-                Text("No Applications")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.secondary)
-            }
+        VStack(spacing: 16) {
+            Image(systemName: "square.grid.3x3.slash.fill")
+                .font(.system(size: 50))
+                .foregroundColor(.blue)
+            Text("No Applications")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.secondary)
         }
     }
 }
@@ -276,28 +270,29 @@ struct AshteHomeAppCell: View {
             AsyncImage(url: app.fullImageURL) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
-                ZStack {
-                    Color(UIColor.secondarySystemBackground)
-                    ProgressView()
-                }
+                Color(UIColor.secondarySystemBackground)
             }
-            .frame(width: 60, height: 60)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
             )
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(app.name)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(.system(size: 16, weight: .regular))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text(app.developerName ?? "AshteMobile")
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                Text("\(app.version ?? "1.0") • \(app.subtitle ?? app.developerName ?? "")")
+                    .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
+                
+                Text(app.safeCategory.capitalized)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(.secondary.opacity(0.8))
             }
             
             Spacer()
@@ -306,30 +301,30 @@ struct AshteHomeAppCell: View {
                 if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                     ZStack {
                         Circle()
-                            .stroke(Color.purple.opacity(0.2), lineWidth: 2.5)
+                            .stroke(Color.blue.opacity(0.2), lineWidth: 2.5)
                             .frame(width: 31, height: 31)
                         
                         Circle()
                             .trim(from: 0, to: downloadProgress)
-                            .stroke(Color.purple, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                             .frame(width: 31, height: 31)
                             .animation(.spring(), value: downloadProgress)
 
                         Image(systemName: "stop.fill")
                             .font(.system(size: 10, weight: .black))
-                            .foregroundColor(.purple)
+                            .foregroundColor(.blue)
                     }
                     .onTapGesture {
                         downloadManager.cancelDownload(currentDownload)
                     }
                 } else {
                     Button(action: { triggerDownload() }) {
-                        Text(isDownloading ? "..." : "GET")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                        Text("Get")
+                            .font(.system(size: 15, weight: .bold))
                             .frame(width: 68, height: 30)
-                            .background(Color.purple.opacity(0.12))
-                            .foregroundColor(.purple)
+                            .background(Color.blue.opacity(0.12))
+                            .foregroundColor(.blue)
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
@@ -393,125 +388,198 @@ struct AshteHomeAppDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                // Top Blurred Background Header
                 ZStack(alignment: .bottom) {
                     GeometryReader { proxy in
                         let minY = proxy.frame(in: .global).minY
-                        let height = max(280 + minY, 280)
+                        let height = max(200 + minY, 200)
                         
                         AsyncImage(url: app.fullImageURL) { image in
-                            image.resizable().aspectRatio(contentMode: .fill).blur(radius: 40)
+                            image.resizable().aspectRatio(contentMode: .fill).blur(radius: 30)
                         } placeholder: {
-                            Color.purple.opacity(0.6)
+                            Color(UIColor.secondarySystemBackground)
                         }
                         .frame(width: proxy.size.width, height: height)
                         .offset(y: minY > 0 ? -minY : 0)
                         .clipped()
+                        .overlay(Color.black.opacity(0.2))
                     }
-                    .frame(height: 280)
-                    
-                    LinearGradient(colors: [Color(UIColor.systemBackground).opacity(0), Color(UIColor.systemBackground)], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 100)
+                    .frame(height: 200)
                     
                     VStack {
                         HStack {
                             Button(action: { presentationMode.wrappedValue.dismiss() }) {
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 40, height: 40)
-                                    .background(Color(UIColor.systemBackground).opacity(0.8))
+                                    .foregroundColor(.white)
+                                    .frame(width: 36, height: 36)
+                                    .background(Color.black.opacity(0.4))
                                     .clipShape(Circle())
-                                    .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
                             }
                             Spacer()
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 16)
                         .padding(.top, 50)
                         Spacer()
                     }
                 }
                 
-                VStack(spacing: 16) {
-                    AsyncImage(url: app.fullImageURL) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color(UIColor.secondarySystemBackground)
-                    }
-                    .frame(width: 100, height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
-                    .offset(y: -50)
-                    .padding(.bottom, -50)
-                    
-                    VStack(spacing: 6) {
-                        Text(app.name)
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
+                // App Info Profile
+                VStack(spacing: 20) {
+                    HStack(alignment: .top, spacing: 16) {
+                        AsyncImage(url: app.fullImageURL) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color(UIColor.secondarySystemBackground)
+                        }
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
                         
-                        Text(app.developerName ?? "AshteMobile")
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    ZStack {
-                        if let currentDownload = downloadManager.getDownload(by: app.stringID) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(app.name)
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.primary)
+                                .lineLimit(2)
+                            
+                            Text(app.safeCategory.capitalized)
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 2) {
+                                ForEach(0..<5) { _ in
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.yellow)
+                                }
+                                Text("(1.2K)")
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundColor(.secondary)
+                                    .padding(.left, 4)
+                            }
+                            .padding(.top, 2)
+                            
                             HStack(spacing: 12) {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                Text("Downloading...")
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
+                                if let currentDownload = downloadManager.getDownload(by: app.stringID) {
+                                    Button(action: { downloadManager.cancelDownload(currentDownload) }) {
+                                        HStack {
+                                            ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        }
+                                        .frame(width: 70, height: 30)
+                                        .background(Color.blue)
+                                        .clipShape(Capsule())
+                                    }
+                                } else {
+                                    Button(action: { triggerDownload() }) {
+                                        Text("Get")
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .frame(width: 70, height: 30)
+                                            .background(Color.blue)
+                                            .clipShape(Capsule())
+                                    }
+                                }
                             }
-                            .frame(width: 180, height: 42)
-                            .background(Color.purple)
-                            .clipShape(Capsule())
-                            .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
-                            .onTapGesture {
-                                downloadManager.cancelDownload(currentDownload)
+                            .padding(.top, 8)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    
+                    // Version & Size Pills
+                    HStack(spacing: 12) {
+                        HStack {
+                            Image(systemName: "tag")
+                                .foregroundColor(.secondary)
+                            Text(app.version ?? "1.0")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        
+                        HStack {
+                            Image(systemName: "shippingbox")
+                                .foregroundColor(.secondary)
+                            Text(app.size ?? "Unknown")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    // Screenshots Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Screenshots")
+                            .font(.system(size: 20, weight: .bold))
+                            .padding(.horizontal, 20)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 16) {
+                                AsyncImage(url: app.fullImageURL) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Color(UIColor.secondarySystemBackground)
+                                }
+                                .frame(width: 260, height: 160)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
                             }
-                        } else {
-                            Button(action: { triggerDownload() }) {
-                                Text(isDownloading ? "..." : "GET APP")
-                                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                                    .frame(width: 140, height: 42)
-                                    .background(Color.purple)
-                                    .clipShape(Capsule())
-                                    .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
-                            }
+                            .padding(.horizontal, 20)
                         }
                     }
                     .padding(.top, 10)
-                }
-                .padding(.horizontal, 20)
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Information")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .padding(.top, 30)
-                        .padding(.horizontal, 20)
                     
-                    VStack(spacing: 0) {
-                        AshteHomeInfoRow(title: "Version", value: app.version ?? "1.0", isLast: false)
-                        AshteHomeInfoRow(title: "Category", value: app.category ?? "Apps", isLast: false)
-                        AshteHomeInfoRow(title: "Developer", value: app.developerName ?? "AshteMobile", isLast: false)
-                        AshteHomeInfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile", isLast: true)
+                    // Description
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Description")
+                            .font(.system(size: 20, weight: .bold))
+                        
+                        Text(app.localizedDescription ?? app.subtitle ?? "No description provided.")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(.primary.opacity(0.9))
+                            .lineSpacing(4)
                     }
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color(UIColor.secondarySystemGroupedBackground))
-                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    
+                    Divider().padding(.horizontal, 20).padding(.top, 10)
+                    
+                    // Information Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Information")
+                            .font(.system(size: 20, weight: .bold))
+                            .padding(.bottom, 4)
+                        
+                        AshteAppInfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
+                        if let updatedDate = app.versions?.first?.date {
+                            let formattedDate = String(updatedDate.prefix(10))
+                            AshteAppInfoRow(title: "Updated", value: formattedDate)
+                        } else {
+                            AshteAppInfoRow(title: "Updated", value: "Unknown")
+                        }
+                        AshteAppInfoRow(title: "Identifier", value: app.bundleIdentifier ?? "Unknown")
+                        AshteAppInfoRow(title: "Minimum iOS", value: app.versions?.first?.minOSVersion ?? "14.0")
+                        AshteAppInfoRow(title: "Languages", value: "EN, AR, KU", hideDivider: true)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
                 }
-                .padding(.bottom, 50)
             }
         }
-        .background(Color(UIColor.systemGroupedBackground).edgesIgnoringSafeArea(.all))
+        .background(Color(UIColor.systemBackground).edgesIgnoringSafeArea(.all))
         .edgesIgnoringSafeArea(.top)
         .navigationBarHidden(true)
         .onAppear(perform: setupObserver)
@@ -557,28 +625,27 @@ struct AshteHomeAppDetailView: View {
     }
 }
 
-struct AshteHomeInfoRow: View {
+// Helper Row for Information Section
+struct AshteAppInfoRow: View {
     let title: String
     let value: String
-    let isLast: Bool
+    var hideDivider: Bool = false
     
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 12) {
             HStack {
                 Text(title)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.primary)
                 Spacer()
                 Text(value)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            
-            if !isLast {
+            if !hideDivider {
                 Divider()
-                    .padding(.leading, 16)
             }
         }
     }
