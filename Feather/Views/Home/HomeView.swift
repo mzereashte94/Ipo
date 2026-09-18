@@ -265,7 +265,7 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - App Cell View
+// MARK: - App Cell View (ڕێکخراوەتەوە وەکو SourceAppsCellView)
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
@@ -276,26 +276,28 @@ struct AshteHomeAppCell: View {
     @State private var isDownloading = false
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
+            // 💡 ئایکۆنەکە بە هەمان قەبارە و ستایلی FRIconCellView ڕێکخراوە
             AsyncImage(url: app.fullImageURL) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
                 Color(UIColor.secondarySystemBackground)
             }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(width: 58, height: 58)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 1 / UIScreen.main.scale)
             )
             
-            VStack(alignment: .leading, spacing: 5) {
+            // 💡 ناو و وەسفەکە بە هەمان فۆنتی سەرەکی
+            VStack(alignment: .leading, spacing: 3) {
                 Text(app.name)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 
-                Text("\(app.version ?? "1.0") • \(app.category ?? "Apps")")
+                Text("\(app.version ?? "1.0") • \(app.category ?? "games")")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -303,32 +305,40 @@ struct AshteHomeAppCell: View {
             
             Spacer()
             
+            // 💡 دوگمەی Get ڕێک بە شێوەی DownloadButtonView
             ZStack {
                 if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                     ZStack {
                         Circle()
                             .trim(from: 0, to: downloadProgress)
-                            .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.3, lineCap: .round))
                             .rotationEffect(.degrees(-90))
-                            .frame(width: 30, height: 30)
+                            .frame(width: 31, height: 31)
                             .animation(.smooth, value: downloadProgress)
 
-                        Image(systemName: "stop.fill")
-                            .foregroundStyle(.blue)
-                            .font(.system(size: 10, weight: .black))
+                        Image(systemName: downloadProgress >= 0.75 ? "archivebox" : "square.fill")
+                            .foregroundStyle(.tint)
+                            .font(.footnote).bold()
                     }
                     .onTapGesture {
-                        downloadManager.cancelDownload(currentDownload)
+                        if downloadProgress <= 0.75 {
+                            downloadManager.cancelDownload(currentDownload)
+                        }
                     }
+                    .compatTransition()
                 } else {
                     Button(action: { triggerDownload() }) {
                         Text("Get")
-                            .font(.system(size: 15, weight: .bold))
-                            .frame(width: 72, height: 32)
-                            .background(Color.blue.opacity(0.1))
-                            .foregroundColor(.blue)
+                            .lineLimit(0)
+                            .font(.headline.bold())
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 6)
+                            .background(Color(uiColor: .quaternarySystemFill))
                             .clipShape(Capsule())
                     }
+                    .buttonStyle(.borderless)
+                    .compatTransition()
                 }
             }
         }
@@ -639,5 +649,15 @@ struct AshteDetailInfoRow: View {
                 .foregroundColor(.secondary)
         }
         Divider()
+    }
+}
+
+extension View {
+    func compatTransition() -> some View {
+        if #available(iOS 16.0, *) {
+            return self.transition(.push(from: .bottom))
+        } else {
+            return self.transition(.move(edge: .bottom))
+        }
     }
 }
