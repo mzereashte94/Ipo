@@ -29,7 +29,6 @@ struct AshteHomeNewsModel: Codable, Identifiable {
     let imageURL: String?
     let tintColor: String?
 
-    // 💡 دانانی لۆگۆی تایبەت بۆ تێلیگرام و ئینستاگرام بەپێی داواکارییەکەت
     var customImageURL: URL? {
         let lowerTitle = title.lowercased()
         if lowerTitle.contains("telegram") {
@@ -48,7 +47,7 @@ struct AshteAppVersionInfo: Codable {
     let minOSVersion: String?
 }
 
-// 💡 گەڕاندنەوەی پێکهاتەی ئەپەکە بۆ شێوازە بنەڕەتییەکەی خۆت بۆ ئەوەی ئێرۆر لە پڕۆژەکەت دروست نەکات
+// 💡 مۆدێلەکە گەڕێنرایەوە بۆ دۆخە ڕەسەنەکەی خۆی بۆ ئەوەی هیچ ئێرۆرێک لە فایلەکانی تر دروست نەکات
 struct AshteHomeAppModel: Codable, Identifiable {
     var id: Int { idNumber }
     let idNumber: Int
@@ -61,7 +60,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     let bundleIdentifier: String?
     let download_url: String
     
-    // زیادکراوەکان بۆ پەڕەی ناوەوەی ئەپەکان
+    // زیادکراوەکان تەنها وەک هەڵبژاردە (Optional) زیادکراون
     let icon: String?
     let type: String?
     let subtitle: String?
@@ -117,9 +116,9 @@ struct HomeView: View {
     }
     
     var body: some View {
-        NBNavigationView(.localized("Discover")) {
+        NBNavigationView(.localized("Home")) {
             List {
-                // MARK: - Banner Slider (News/Social)
+                // MARK: - Banner Slider
                 if !newsList.isEmpty && searchText.isEmpty {
                     Section {
                         TabView {
@@ -145,7 +144,7 @@ struct HomeView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .always))
+                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .always))
                         .frame(height: 220)
                         .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 0, trailing: 0))
                         .listRowBackground(Color.clear)
@@ -457,7 +456,6 @@ struct AshteHomeAppDetailView: View {
                                 .foregroundColor(.secondary)
                             
                             HStack(spacing: 2) {
-                                // 💡 چارەسەری ئێرۆری ForEach کراوە لێرەدا
                                 ForEach(0..<5, id: \.self) { _ in
                                     Image(systemName: "star.fill")
                                         .font(.system(size: 12))
