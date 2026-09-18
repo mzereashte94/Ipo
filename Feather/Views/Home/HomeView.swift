@@ -12,6 +12,7 @@ import Foundation
 import UIKit
 import Combine
 import CoreData
+import AudioToolbox // 🔔 ئەمە زیادکراوە بۆ کارپێکردنی دەنگەکە
 
 // MARK: - Models
 struct AshteHomeAppResponse: Codable {
@@ -341,6 +342,11 @@ struct AshteHomeAppCell: View {
                 setupObserver()
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
+                
+                // 🔔 زەنگ و لەرزین لێرە زیادکراوە کاتێک دەگاتە 100%
+                AudioServicesPlaySystemSound(1052)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                
                 onDownloadComplete()
             }
         }
@@ -559,6 +565,11 @@ struct AshteHomeAppDetailView: View {
                 setupObserver()
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
+                
+                // 🔔 زەنگ و لەرزین لێرەش بۆ پەنجەرەی ناوەوە زیادکراوە کاتێک دەگاتە 100%
+                AudioServicesPlaySystemSound(1052)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                
                 onDownloadComplete()
             }
         }
