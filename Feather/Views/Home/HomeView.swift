@@ -8,9 +8,11 @@
 import SwiftUI
 import NimbleViews
 import AltSourceKit
+import Foundation
 import UIKit
 import Combine
 import CoreData
+import AudioToolbox // 🔔 ئەمە زیادکراوە بۆ کارپێکردنی دەنگەکە
 
 // MARK: - Models
 struct AshteHomeAppResponse: Codable {
@@ -29,7 +31,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     let developerName: String?
     let bundleIdentifier: String?
     let download_url: String
-    let descriptionText: String?
+    let descriptionText: String? // Added for detail view
     
     var stringID: String {
         return "\(idNumber)"
@@ -110,6 +112,7 @@ struct HomeView: View {
                                     }
                                     .frame(height: 180)
                                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 3)
                                     .padding(.horizontal, 20)
                                 }
                             }
@@ -191,6 +194,7 @@ struct HomeView: View {
             
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
+                print("No imported app found")
                 return
             }
             
@@ -213,6 +217,8 @@ struct HomeView: View {
                             Storage.shared.deleteApp(for: importedApp)
                         }
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                    } else {
+                        print("Signing Error: \(String(describing: error))")
                     }
                 }
             }
@@ -242,7 +248,7 @@ struct AshteHomeEmptyView: View {
             ContentUnavailableView {
                 Label(.localized("No Applications"), systemImage: "magnifyingglass")
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(.blue)
             } description: {
                 Text(.localized("We couldn't find any apps matching your search."))
             }
@@ -270,26 +276,26 @@ struct AshteHomeAppCell: View {
     @State private var isDownloading = false
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 16) {
             AsyncImage(url: app.fullImageURL) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
                 Color(UIColor.secondarySystemBackground)
             }
-            .frame(width: 58, height: 58)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.black.opacity(0.08), lineWidth: 1 / UIScreen.main.scale)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
             )
             
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(app.name)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .foregroundColor(.primary)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 
-                Text("\(app.version ?? "1.0") • \(app.category ?? "games")")
+                Text("\(app.version ?? "1.0") • \(app.category ?? "Apps")")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -302,32 +308,27 @@ struct AshteHomeAppCell: View {
                     ZStack {
                         Circle()
                             .trim(from: 0, to: downloadProgress)
-                            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.3, lineCap: .round))
+                            .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                             .rotationEffect(.degrees(-90))
-                            .frame(width: 31, height: 31)
+                            .frame(width: 30, height: 30)
                             .animation(.smooth, value: downloadProgress)
 
-                        Image(systemName: downloadProgress >= 0.75 ? "archivebox" : "square.fill")
-                            .foregroundStyle(.tint)
-                            .font(.footnote).bold()
+                        Image(systemName: "stop.fill")
+                            .foregroundStyle(.blue)
+                            .font(.system(size: 10, weight: .black))
                     }
                     .onTapGesture {
-                        if downloadProgress <= 0.75 {
-                            downloadManager.cancelDownload(currentDownload)
-                        }
+                        downloadManager.cancelDownload(currentDownload)
                     }
                 } else {
                     Button(action: { triggerDownload() }) {
                         Text("Get")
-                            .lineLimit(0)
-                            .font(.headline.bold())
-                            .foregroundStyle(Color.accentColor)
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 6)
-                            .background(Color(uiColor: .quaternarySystemFill))
+                            .font(.system(size: 15, weight: .bold))
+                            .frame(width: 72, height: 32)
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
                             .clipShape(Capsule())
                     }
-                    .buttonStyle(.borderless)
                 }
             }
         }
@@ -341,8 +342,11 @@ struct AshteHomeAppCell: View {
                 setupObserver()
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
+                
+                // 🔔 زەنگ و لەرزین لێرە زیادکراوە کاتێک دەگاتە 100%
+                AudioServicesPlaySystemSound(1300)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                
                 onDownloadComplete()
             }
         }
@@ -414,6 +418,7 @@ struct AshteHomeAppDetailView: View {
                         Spacer()
                         
                         Button(action: {
+                            // Action for share if needed
                         }) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 17, weight: .bold))
@@ -465,11 +470,11 @@ struct AshteHomeAppDetailView: View {
                     ZStack {
                         if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                             ZStack {
-                                Capsule().fill(Color.accentColor.opacity(0.1))
+                                Capsule().fill(Color.blue.opacity(0.1))
                                 HStack {
                                     Text("Downloading...")
                                         .font(.system(size: 16, weight: .bold, design: .rounded))
-                                        .foregroundColor(.accentColor)
+                                        .foregroundColor(.blue)
                                     Spacer()
                                     ProgressView()
                                 }
@@ -482,19 +487,20 @@ struct AshteHomeAppDetailView: View {
                                     .font(.system(size: 16, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity, minHeight: 44)
-                                    .background(Color.accentColor)
+                                    .background(Color.blue)
                                     .clipShape(Capsule())
                             }
                         }
                     }
                     
                     Button(action: {
+                        // Action for secondary button if needed
                     }) {
                         Text("Share")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(Color.accentColor)
+                            .background(Color.blue)
                             .clipShape(Capsule())
                     }
                 }
@@ -559,8 +565,11 @@ struct AshteHomeAppDetailView: View {
                 setupObserver()
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
+                
+                // 🔔 زەنگ و لەرزین لێرەش بۆ پەنجەرەی ناوەوە زیادکراوە کاتێک دەگاتە 100%
+                AudioServicesPlaySystemSound(1300)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                
                 onDownloadComplete()
             }
         }
@@ -603,14 +612,14 @@ struct AshtePillView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.accentColor)
+                .foregroundColor(.blue)
             Text(text)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(Color.accentColor.opacity(0.1))
+        .background(Color.blue.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
