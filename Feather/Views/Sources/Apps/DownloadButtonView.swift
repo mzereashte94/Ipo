@@ -9,6 +9,7 @@ import SwiftUI
 import Combine
 import AltSourceKit
 import NimbleViews
+import CoreData // 💡 زیادکرا بۆ ئەوەی دەستمان بە داتابەیس بگات بۆ واژووکردن
 
 struct DownloadButtonView: View {
 	let app: ASRepository.App
@@ -16,6 +17,10 @@ struct DownloadButtonView: View {
 
 	@State private var downloadProgress: Double = 0
 	@State private var cancellable: AnyCancellable?
+    
+    // 💡 زیادکراوەکان بۆ چاودێریکردنی تەواوبوونی داونلۆد و زانینی جۆری ئینستاڵ
+    @State private var isDownloading = false
+    @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
 
 	var body: some View {
 		ZStack {
@@ -61,6 +66,15 @@ struct DownloadButtonView: View {
 		.onDisappear { cancellable?.cancel() }
 		.onChange(of: downloadManager.downloads.description) { _ in
 			setupObserver()
+            
+            // 💡 لێرەدا چاودێری دەکەین بزانین کەی داونلۆدەکە لە لیستەکە نامێنێت (واتە تەواو دەبێت)
+            let isCurrentlyDownloading = downloadManager.getDownload(by: app.currentUniqueId) != nil
+            if isCurrentlyDownloading {
+                isDownloading = true
+            } else if isDownloading && !isCurrentlyDownloading {
+                isDownloading = false
+                handleDownloadCompletion() // کاتێک تەواو بوو ئەم فەنکشنە کار دەکات
+            }
 		}
 		.animation(.easeInOut(duration: 0.3), value: downloadManager.getDownload(by: app.currentUniqueId) != nil)
 	}
@@ -82,4 +96,49 @@ struct DownloadButtonView: View {
 			downloadProgress = download.overallProgress
 		}
 	}
+    
+    // 💡 پرۆسەی جیاکردنەوەی هەردوو شێوازی (Server و idevice) لە کاتی تەواوبوونی داونلۆد
+    private func handleDownloadCompletion() {
+        // ئەگەر لەسەر idevice (1) بوو، تەنها لەرزینێک دەکات و دەوەستێت (دەچێتە Library)
+        if installationMethod == 1 {
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            return
+        }
+        
+        // ئەگەر لەسەر Server (0) بوو، پرۆسەی واژووکردنی ئۆتۆماتیکی دەست پێ دەکات
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            let request = NSFetchRequest<Imported>(entityName: "Imported")
+            request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
+            
+            guard let importedApps = try? Storage.shared.context.fetch(request),
+                  let importedApp = importedApps.first else {
+                return
+            }
+            
+            let options = OptionsManager.shared.options
+            let certRequest = NSFetchRequest<CertificatePair>(entityName: "CertificatePair")
+            certRequest.sortDescriptors = [NSSortDescriptor(keyPath: \CertificatePair.date, ascending: false)]
+            let certs = try? Storage.shared.context.fetch(certRequest)
+            let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
+            let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
+            
+            FR.signPackageFile(
+                importedApp,
+                using: options,
+                icon: nil,
+                certificate: selectedCert
+            ) { error in
+                DispatchQueue.main.async {
+                    if error == nil {
+                        if options.post_deleteAppAfterSigned {
+                            Storage.shared.deleteApp(for: importedApp)
+                        }
+                        // ناردنی نۆتیفیکەیشنی فەرمی بۆ هێنانە سەر شاشەی Install
+                        NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                    }
+                }
+            }
+        }
+    }
 }
