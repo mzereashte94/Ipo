@@ -70,11 +70,9 @@ struct HomeView: View {
     
     var body: some View {
         NBNavigationView(.localized("Discover")) {
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    
-                    // MARK: - Modern Telegram Banner
-                    if !filteredApps.isEmpty {
+            List {
+                if !filteredApps.isEmpty {
+                    Section {
                         Button(action: {
                             if let url = URL(string: "https://t.me/ashtemobile") {
                                 UIApplication.shared.open(url)
@@ -82,80 +80,55 @@ struct HomeView: View {
                         }) {
                             HStack(spacing: 16) {
                                 ZStack {
-                                    LinearGradient(colors: [Color(hex: "8A2387"), Color(hex: "E94057"), Color(hex: "F27121")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    // گۆڕینی ڕەنگەکان بەبێ بەکارهێنانی Hex بۆ ئەوەی کێشە دروست نەکات
+                                    LinearGradient(colors: [
+                                        Color(red: 138/255, green: 35/255, blue: 135/255),
+                                        Color(red: 233/255, green: 64/255, blue: 87/255),
+                                        Color(red: 242/255, green: 113/255, blue: 33/255)
+                                    ], startPoint: .topLeading, endPoint: .bottomTrailing)
                                         .frame(width: 56, height: 56)
-                                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                     
                                     Image(systemName: "paperplane.fill")
-                                        .font(.system(size: 26, weight: .bold))
+                                        .font(.system(size: 24, weight: .bold))
                                         .foregroundColor(.white)
                                 }
-                                
+                                .shadow(color: Color(red: 233/255, green: 64/255, blue: 87/255).opacity(0.3), radius: 8, x: 0, y: 4)
+
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("AshteMobile Channel")
-                                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                                        .font(.system(size: 16, weight: .bold, design: .rounded))
                                         .foregroundColor(.primary)
                                     
-                                    Text("Join Telegram for the latest updates")
+                                    Text("Join our Telegram for updates")
                                         .font(.system(size: 13, weight: .medium, design: .rounded))
                                         .foregroundColor(.secondary)
                                 }
-                                
                                 Spacer()
-                                
                                 Image(systemName: "arrow.right.circle.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundStyle(.purple.opacity(0.8), .purple.opacity(0.1))
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.purple.opacity(0.8))
                             }
-                            .padding(16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .fill(Color(UIColor.secondarySystemGroupedBackground))
-                                    .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
-                            )
+                            .padding(.vertical, 8)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 10)
-                        
-                        // MARK: - App List Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack {
-                                Text("Applications")
-                                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                                Spacer()
-                                Text("\(filteredApps.count)")
-                                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                                    .background(Capsule().fill(Color.purple))
+                    }
+                    .listRowBackground(Color(UIColor.secondarySystemGroupedBackground))
+                    
+                    NBSection(
+                        .localized("Applications"),
+                        secondary: filteredApps.count.description
+                    ) {
+                        ForEach(filteredApps) { app in
+                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
+                                AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
+                                    .padding(.vertical, 6)
                             }
-                            .padding(.horizontal, 20)
-                            
-                            VStack(spacing: 0) {
-                                ForEach(filteredApps) { app in
-                                    NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
-                                        AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
-                                            .padding(.horizontal, 20)
-                                            .padding(.vertical, 12)
-                                            .background(Color(UIColor.systemBackground))
-                                    }
-                                    .buttonStyle(.plain)
-                                    
-                                    if app.idNumber != filteredApps.last?.idNumber {
-                                        Divider()
-                                            .padding(.leading, 96) // Align with text
-                                    }
-                                }
-                            }
-                            .background(Color(UIColor.systemBackground))
                         }
                     }
                 }
-                .padding(.bottom, 30)
             }
-            .background(Color(UIColor.systemGroupedBackground).edgesIgnoringSafeArea(.all))
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
+            .listStyle(.insetGrouped)
+            .searchable(text: $searchText, placement: .platform())
             .overlay {
                 if filteredApps.isEmpty {
                     AshteHomeEmptyView()
@@ -182,7 +155,6 @@ struct HomeView: View {
         }
     }
     
-    // 💡 چارەسەری قایم: وەرگرتنی ڕاستەوخۆی کۆتا ئەپی داونلۆدکراو بێ پێویستبوون بە پشکنینی ناو
     private func handleAutoSign() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
@@ -240,22 +212,23 @@ struct HomeView: View {
 // MARK: - Empty State View
 struct AshteHomeEmptyView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "square.grid.3x3.slash.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(
-                    LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
-            
-            Text("No Applications Found")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(.primary)
-            
-            Text("Check your connection or pull to refresh.")
-                .font(.system(size: 15, weight: .regular, design: .rounded))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+        if #available(iOS 17, *) {
+            ContentUnavailableView {
+                Label(.localized("No Applications"), systemImage: "square.grid.3x3.slash.fill")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundColor(.purple)
+            } description: {
+                Text(.localized("Check your connection or refresh to load apps."))
+            }
+        } else {
+            VStack(spacing: 16) {
+                Image(systemName: "square.grid.3x3.slash.fill")
+                    .font(.system(size: 50))
+                    .foregroundColor(.purple)
+                Text("No Applications")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }
@@ -271,7 +244,7 @@ struct AshteHomeAppCell: View {
     @State private var isDownloading = false
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 15) {
             AsyncImage(url: app.fullImageURL) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
@@ -280,16 +253,16 @@ struct AshteHomeAppCell: View {
                     ProgressView()
                 }
             }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(width: 60, height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.black.opacity(0.05), lineWidth: 1)
             )
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(app.name)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
@@ -305,14 +278,14 @@ struct AshteHomeAppCell: View {
                 if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                     ZStack {
                         Circle()
-                            .stroke(Color.purple.opacity(0.2), lineWidth: 3)
-                            .frame(width: 32, height: 32)
+                            .stroke(Color.purple.opacity(0.2), lineWidth: 2.5)
+                            .frame(width: 31, height: 31)
                         
                         Circle()
                             .trim(from: 0, to: downloadProgress)
-                            .stroke(Color.purple, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .stroke(Color.purple, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                             .rotationEffect(.degrees(-90))
-                            .frame(width: 32, height: 32)
+                            .frame(width: 31, height: 31)
                             .animation(.spring(), value: downloadProgress)
 
                         Image(systemName: "stop.fill")
@@ -326,11 +299,12 @@ struct AshteHomeAppCell: View {
                     Button(action: { triggerDownload() }) {
                         Text(isDownloading ? "..." : "GET")
                             .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .frame(width: 72, height: 32)
-                            .background(Color(UIColor.secondarySystemBackground))
+                            .frame(width: 68, height: 30)
+                            .background(Color.purple.opacity(0.12))
                             .foregroundColor(.purple)
                             .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -391,7 +365,7 @@ struct AshteHomeAppDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Modern Header with fade and glassmorphism
+                // Header Image
                 ZStack(alignment: .bottom) {
                     GeometryReader { proxy in
                         let minY = proxy.frame(in: .global).minY
@@ -400,7 +374,7 @@ struct AshteHomeAppDetailView: View {
                         AsyncImage(url: app.fullImageURL) { image in
                             image.resizable().aspectRatio(contentMode: .fill).blur(radius: 40)
                         } placeholder: {
-                            LinearGradient(colors: [.purple.opacity(0.6), .blue.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                            Color.purple.opacity(0.6)
                         }
                         .frame(width: proxy.size.width, height: height)
                         .offset(y: minY > 0 ? -minY : 0)
@@ -411,7 +385,7 @@ struct AshteHomeAppDetailView: View {
                     LinearGradient(colors: [Color(UIColor.systemBackground).opacity(0), Color(UIColor.systemBackground)], startPoint: .top, endPoint: .bottom)
                         .frame(height: 100)
                     
-                    // Floating Back Button
+                    // Back Button
                     VStack {
                         HStack {
                             Button(action: { presentationMode.wrappedValue.dismiss() }) {
@@ -419,7 +393,7 @@ struct AshteHomeAppDetailView: View {
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(.primary)
                                     .frame(width: 40, height: 40)
-                                    .background(.ultraThinMaterial)
+                                    .background(Color(UIColor.systemBackground).opacity(0.8))
                                     .clipShape(Circle())
                                     .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
                             }
@@ -431,31 +405,31 @@ struct AshteHomeAppDetailView: View {
                     }
                 }
                 
-                // App Profile Info
+                // App Profile
                 VStack(spacing: 16) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Color(UIColor.secondarySystemBackground)
                     }
-                    .frame(width: 110, height: 110)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .shadow(color: .black.opacity(0.15), radius: 15, x: 0, y: 8)
+                    .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
                             .stroke(Color.white.opacity(0.2), lineWidth: 1)
                     )
-                    .offset(y: -55)
-                    .padding(.bottom, -55)
+                    .offset(y: -50)
+                    .padding(.bottom, -50)
                     
-                    VStack(spacing: 8) {
+                    VStack(spacing: 6) {
                         Text(app.name)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
                         
                         Text(app.developerName ?? "AshteMobile")
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundColor(.secondary)
                     }
                     
@@ -469,22 +443,22 @@ struct AshteHomeAppDetailView: View {
                                     .font(.system(size: 16, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                             }
-                            .frame(width: 180, height: 44)
+                            .frame(width: 180, height: 42)
                             .background(Color.purple)
                             .clipShape(Capsule())
-                            .shadow(color: .purple.opacity(0.3), radius: 10, x: 0, y: 5)
+                            .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
                             .onTapGesture {
                                 downloadManager.cancelDownload(currentDownload)
                             }
                         } else {
                             Button(action: { triggerDownload() }) {
                                 Text(isDownloading ? "..." : "GET APP")
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
-                                    .frame(width: 160, height: 44)
+                                    .frame(width: 140, height: 42)
                                     .background(Color.purple)
                                     .clipShape(Capsule())
-                                    .shadow(color: .purple.opacity(0.3), radius: 10, x: 0, y: 5)
+                                    .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
                             }
                         }
                     }
@@ -492,10 +466,10 @@ struct AshteHomeAppDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 
-                // Information Cards
+                // Details
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Information")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
                         .padding(.top, 30)
                         .padding(.horizontal, 20)
                     
@@ -506,7 +480,7 @@ struct AshteHomeAppDetailView: View {
                         AshteHomeInfoRow(title: "Identifier", value: app.bundleIdentifier ?? "com.ashtemobile", isLast: true)
                     }
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .fill(Color(UIColor.secondarySystemGroupedBackground))
                     )
                     .padding(.horizontal, 20)
@@ -577,40 +551,12 @@ struct AshteHomeInfoRow: View {
                     .foregroundColor(.primary)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
             
             if !isLast {
                 Divider()
                     .padding(.leading, 16)
             }
         }
-    }
-}
-
-// Helper extension بۆ بەکارهێنانی ڕەنگی HEX ئەگەر پێویست بوو بۆ باکگراوندی تێلیگرام
-extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (1, 1, 1, 0)
-        }
-
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue:  Double(b) / 255,
-            opacity: Double(a) / 255
-        )
     }
 }
