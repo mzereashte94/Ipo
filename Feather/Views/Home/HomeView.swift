@@ -13,41 +13,12 @@ import UIKit
 import Combine
 import CoreData
 
-// MARK: - Models
+// MARK: - Models (Original - گەڕێنرایەوە بۆ ڕەسەنەکەی خۆت بۆ نەهێشتنی ئێرۆر)
 struct AshteHomeAppResponse: Codable {
     let name: String?
     let apps: [AshteHomeAppModel]
-    let news: [AshteHomeNewsModel]?
 }
 
-struct AshteHomeNewsModel: Codable, Identifiable {
-    var id: String { identifier }
-    let identifier: String
-    let title: String
-    let caption: String?
-    let url: String
-    let imageURL: String?
-    let tintColor: String?
-
-    var customImageURL: URL? {
-        let lowerTitle = title.lowercased()
-        if lowerTitle.contains("telegram") {
-            return URL(string: "https://ashtemobile.site/img/t.png")
-        } else if lowerTitle.contains("instagram") {
-            return URL(string: "https://ashtemobile.site/img/i.png")
-        }
-        guard let img = imageURL else { return nil }
-        return URL(string: img)
-    }
-}
-
-struct AshteAppVersionInfo: Codable {
-    let version: String?
-    let date: String?
-    let minOSVersion: String?
-}
-
-// 💡 مۆدێلەکە گەڕێنرایەوە بۆ دۆخە ڕەسەنەکەی خۆی بۆ ئەوەی هیچ ئێرۆرێک لە فایلەکانی تر دروست نەکات
 struct AshteHomeAppModel: Codable, Identifiable {
     var id: Int { idNumber }
     let idNumber: Int
@@ -60,13 +31,6 @@ struct AshteHomeAppModel: Codable, Identifiable {
     let bundleIdentifier: String?
     let download_url: String
     
-    // زیادکراوەکان تەنها وەک هەڵبژاردە (Optional) زیادکراون
-    let icon: String?
-    let type: String?
-    let subtitle: String?
-    let localizedDescription: String?
-    let versions: [AshteAppVersionInfo]?
-    
     var stringID: String {
         return "\(idNumber)"
     }
@@ -78,29 +42,58 @@ struct AshteHomeAppModel: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
         case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url
-        case icon, type, subtitle, localizedDescription, versions
     }
 
     var fullImageURL: URL? {
-        if let img = iconURL, !img.isEmpty {
-            if img.hasPrefix("http") { return URL(string: img) }
-            return URL(string: "https://ashtemobile.site/\(img)")
-        } else if let img = icon, !img.isEmpty {
-            if img.hasPrefix("http") { return URL(string: img) }
-            return URL(string: "https://ashtemobile.site/\(img)")
+        guard let img = iconURL else { return nil }
+        if img.hasPrefix("http") { return URL(string: img) }
+        return URL(string: "https://ashtemobile.site/\(img)")
+    }
+}
+
+// MARK: - Safe Extended Models (مۆدێلی سەلامەت بۆ دیزاینە نوێیەکە)
+struct AshteHomeExtraResponse: Codable {
+    let news: [AshteHomeNewsItem]?
+    let apps: [AshteHomeAppExtendedInfo]?
+}
+
+struct AshteHomeNewsItem: Codable, Identifiable {
+    var id: String { identifier ?? UUID().uuidString }
+    let identifier: String?
+    let title: String?
+    let caption: String?
+    let url: String?
+    let imageURL: String?
+
+    var customImageURL: URL? {
+        let lowerTitle = (title ?? "").lowercased()
+        if lowerTitle.contains("telegram") {
+            return URL(string: "https://ashtemobile.site/img/t.png")
+        } else if lowerTitle.contains("instagram") {
+            return URL(string: "https://ashtemobile.site/img/i.png")
         }
-        return nil
+        guard let img = imageURL else { return nil }
+        return URL(string: img)
     }
-    
-    var safeCategory: String {
-        return category ?? type ?? "Apps"
-    }
+}
+
+struct AshteHomeAppExtendedInfo: Codable {
+    let id: Int?
+    let subtitle: String?
+    let localizedDescription: String?
+    let versions: [AshteHomeAppVersionData]?
+}
+
+struct AshteHomeAppVersionData: Codable {
+    let date: String?
+    let minOSVersion: String?
 }
 
 // MARK: - Main View
 struct HomeView: View {
     @State private var appsList: [AshteHomeAppModel] = []
-    @State private var newsList: [AshteHomeNewsModel] = []
+    @State private var newsList: [AshteHomeNewsItem] = []
+    @State private var extendedAppInfo: [Int: AshteHomeAppExtendedInfo] = [:]
     @State private var searchText = ""
     
     @State private var _selectedInstallAppPresenting: AnyApp?
@@ -116,7 +109,7 @@ struct HomeView: View {
     }
     
     var body: some View {
-        NBNavigationView(.localized("Home")) {
+        NBNavigationView(.localized("Discover")) {
             List {
                 // MARK: - Banner Slider
                 if !newsList.isEmpty && searchText.isEmpty {
@@ -124,7 +117,7 @@ struct HomeView: View {
                         TabView {
                             ForEach(newsList) { news in
                                 Button(action: {
-                                    if let url = URL(string: news.url) {
+                                    if let urlString = news.url, let url = URL(string: urlString) {
                                         UIApplication.shared.open(url)
                                     }
                                 }) {
@@ -144,7 +137,7 @@ struct HomeView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .always))
+                        .tabViewStyle(.page(indexDisplayMode: .always))
                         .frame(height: 220)
                         .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 0, trailing: 0))
                         .listRowBackground(Color.clear)
@@ -158,7 +151,7 @@ struct HomeView: View {
                         secondary: filteredApps.count.description
                     ) {
                         ForEach(filteredApps) { app in
-                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
+                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign, extendedInfo: extendedAppInfo[app.idNumber])) {
                                 AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
                                     .padding(.vertical, 6)
                             }
@@ -235,10 +228,29 @@ struct HomeView: View {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
+            
+            // 1. Parsing Original Data Safely
             let decoded = try JSONDecoder().decode(AshteHomeAppResponse.self, from: data)
+            
+            // 2. Parsing Extended Data Safely
+            var tempNews: [AshteHomeNewsItem] = []
+            var tempExtendedInfo: [Int: AshteHomeAppExtendedInfo] = [:]
+            
+            if let extraDecoded = try? JSONDecoder().decode(AshteHomeExtraResponse.self, from: data) {
+                tempNews = extraDecoded.news ?? []
+                if let extApps = extraDecoded.apps {
+                    for ext in extApps {
+                        if let id = ext.id {
+                            tempExtendedInfo[id] = ext
+                        }
+                    }
+                }
+            }
+            
             DispatchQueue.main.async {
                 self.appsList = decoded.apps
-                self.newsList = decoded.news ?? []
+                self.newsList = tempNews
+                self.extendedAppInfo = tempExtendedInfo
             }
         } catch {
             print("Error loading apps: \(error)")
@@ -290,12 +302,12 @@ struct AshteHomeAppCell: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text("\(app.version ?? "1.0") • \(app.subtitle ?? app.developerName ?? "AshteMobile")")
+                Text("\(app.version ?? "1.0") • \(app.developerName ?? "AshteMobile")")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 
-                Text(app.safeCategory.capitalized)
+                Text((app.category ?? "Apps").capitalized)
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(.secondary.opacity(0.8))
             }
@@ -383,8 +395,9 @@ struct AshteHomeAppCell: View {
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
-    @Environment(\.presentationMode) var presentationMode
+    var extendedInfo: AshteHomeAppExtendedInfo? = nil // Optional default بۆ ئەوەی لە فایلەکانی تر کێشە دروست نەکات
     
+    @Environment(\.presentationMode) var presentationMode
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
     @State private var cancellable: AnyCancellable?
@@ -422,6 +435,24 @@ struct AshteHomeAppDetailView: View {
                                     .clipShape(Circle())
                             }
                             Spacer()
+                            
+                            Button(action: {}) {
+                                Image(systemName: "heart")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 36, height: 36)
+                                    .background(Color.black.opacity(0.4))
+                                    .clipShape(Circle())
+                            }
+                            
+                            Button(action: {}) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 36, height: 36)
+                                    .background(Color.black.opacity(0.4))
+                                    .clipShape(Circle())
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 50)
@@ -451,7 +482,7 @@ struct AshteHomeAppDetailView: View {
                                 .foregroundColor(.primary)
                                 .lineLimit(2)
                             
-                            Text(app.safeCategory.capitalized)
+                            Text((app.category ?? "Apps").capitalized)
                                 .font(.system(size: 15, weight: .regular))
                                 .foregroundColor(.secondary)
                             
@@ -551,7 +582,7 @@ struct AshteHomeAppDetailView: View {
                         Text("Description")
                             .font(.system(size: 20, weight: .bold))
                         
-                        Text(app.localizedDescription ?? app.subtitle ?? "No description provided.")
+                        Text(extendedInfo?.localizedDescription ?? extendedInfo?.subtitle ?? "No description provided.")
                             .font(.system(size: 15, weight: .regular))
                             .foregroundColor(.primary.opacity(0.9))
                             .lineSpacing(4)
@@ -568,16 +599,18 @@ struct AshteHomeAppDetailView: View {
                             .font(.system(size: 20, weight: .bold))
                             .padding(.bottom, 4)
                         
-                        AshteAppInfoRow(title: "Developer", value: app.developerName ?? "AshteMobile")
-                        if let updatedDate = app.versions?.first?.date {
+                        AshteDetailInfoRowItem(title: "Developer", value: app.developerName ?? "AshteMobile")
+                        
+                        if let updatedDate = extendedInfo?.versions?.first?.date {
                             let formattedDate = String(updatedDate.prefix(10))
-                            AshteAppInfoRow(title: "Updated", value: formattedDate)
+                            AshteDetailInfoRowItem(title: "Updated", value: formattedDate)
                         } else {
-                            AshteAppInfoRow(title: "Updated", value: "Unknown")
+                            AshteDetailInfoRowItem(title: "Updated", value: "Unknown")
                         }
-                        AshteAppInfoRow(title: "Identifier", value: app.bundleIdentifier ?? "Unknown")
-                        AshteAppInfoRow(title: "Minimum iOS", value: app.versions?.first?.minOSVersion ?? "14.0")
-                        AshteAppInfoRow(title: "Languages", value: "EN, AR, KU", hideDivider: true)
+                        
+                        AshteDetailInfoRowItem(title: "Identifier", value: app.bundleIdentifier ?? "Unknown")
+                        AshteDetailInfoRowItem(title: "Minimum iOS", value: extendedInfo?.versions?.first?.minOSVersion ?? "14.0")
+                        AshteDetailInfoRowItem(title: "Languages", value: "EN, AR, KU", hideDivider: true)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 40)
@@ -631,7 +664,7 @@ struct AshteHomeAppDetailView: View {
 }
 
 // Helper Row for Information Section
-struct AshteAppInfoRow: View {
+struct AshteDetailInfoRowItem: View {
     let title: String
     let value: String
     var hideDivider: Bool = false
