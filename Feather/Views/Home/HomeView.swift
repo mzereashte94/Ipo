@@ -17,6 +17,22 @@ import CoreData
 struct AshteHomeAppResponse: Codable {
     let name: String?
     let apps: [AshteHomeAppModel]
+    let news: [AshteHomeNewsModel]? // زیادکرا بۆ خوێندنەوەی هەواڵ/لینكەكان لە JSON
+}
+
+struct AshteHomeNewsModel: Codable, Identifiable {
+    var id: String { identifier }
+    let identifier: String
+    let title: String
+    let caption: String
+    let url: String
+    let imageURL: String?
+    let tintColor: String?
+
+    var fullImageURL: URL? {
+        guard let img = imageURL else { return nil }
+        return URL(string: img)
+    }
 }
 
 struct AshteHomeAppModel: Codable, Identifiable {
@@ -54,6 +70,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
 // MARK: - Main View
 struct HomeView: View {
     @State private var appsList: [AshteHomeAppModel] = []
+    @State private var newsList: [AshteHomeNewsModel] = [] // لیستی هەواڵەکان
     @State private var searchText = ""
     
     @State private var _selectedInstallAppPresenting: AnyApp?
@@ -71,49 +88,58 @@ struct HomeView: View {
     var body: some View {
         NBNavigationView(.localized("Discover")) {
             List {
-                if !filteredApps.isEmpty {
+                // MARK: - Dynamic News Banner (Carousel TabView)
+                if !newsList.isEmpty && searchText.isEmpty {
                     Section {
-                        Button(action: {
-                            if let url = URL(string: "https://t.me/ashtemobile") {
-                                UIApplication.shared.open(url)
-                            }
-                        }) {
-                            HStack(spacing: 16) {
-                                ZStack {
-                                    // گۆڕینی ڕەنگەکان بەبێ بەکارهێنانی Hex بۆ ئەوەی کێشە دروست نەکات
-                                    LinearGradient(colors: [
-                                        Color(red: 138/255, green: 35/255, blue: 135/255),
-                                        Color(red: 233/255, green: 64/255, blue: 87/255),
-                                        Color(red: 242/255, green: 113/255, blue: 33/255)
-                                    ], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        TabView {
+                            ForEach(newsList) { news in
+                                Button(action: {
+                                    if let url = URL(string: news.url) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }) {
+                                    HStack(spacing: 16) {
+                                        AsyncImage(url: news.fullImageURL) { image in
+                                            image.resizable().aspectRatio(contentMode: .fill)
+                                        } placeholder: {
+                                            ZStack {
+                                                LinearGradient(colors: [Color(red: 138/255, green: 35/255, blue: 135/255), Color(red: 233/255, green: 64/255, blue: 87/255)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                                Image(systemName: "link")
+                                                    .foregroundColor(.white)
+                                            }
+                                        }
                                         .frame(width: 56, height: 56)
                                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                    
-                                    Image(systemName: "paperplane.fill")
-                                        .font(.system(size: 24, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                        
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(news.title)
+                                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                                .foregroundColor(.primary)
+                                            
+                                            Text(news.caption)
+                                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "arrow.right.circle.fill")
+                                            .font(.system(size: 22))
+                                            .foregroundColor(.purple.opacity(0.8))
+                                    }
+                                    .padding(.horizontal, 16)
                                 }
-                                .shadow(color: Color(red: 233/255, green: 64/255, blue: 87/255).opacity(0.3), radius: 8, x: 0, y: 4)
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("AshteMobile Channel")
-                                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                                        .foregroundColor(.primary)
-                                    
-                                    Text("Join our Telegram for updates")
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(.purple.opacity(0.8))
+                                .buttonStyle(.plain)
                             }
-                            .padding(.vertical, 8)
                         }
+                        .tabViewStyle(.page(indexDisplayMode: .never)) // شێوازی تاب/سلایدەر
+                        .frame(height: 80)
+                        .listRowInsets(EdgeInsets()) // پڕکردنەوەی تەواوی لاکان
                     }
                     .listRowBackground(Color(UIColor.secondarySystemGroupedBackground))
-                    
+                }
+                
+                // MARK: - Applications List
+                if !filteredApps.isEmpty {
                     NBSection(
                         .localized("Applications"),
                         secondary: filteredApps.count.description
@@ -130,7 +156,7 @@ struct HomeView: View {
             .listStyle(.insetGrouped)
             .searchable(text: $searchText, placement: .platform())
             .overlay {
-                if filteredApps.isEmpty {
+                if filteredApps.isEmpty && appsList.isEmpty {
                     AshteHomeEmptyView()
                 }
             }
@@ -202,6 +228,8 @@ struct HomeView: View {
             let decoded = try JSONDecoder().decode(AshteHomeAppResponse.self, from: data)
             DispatchQueue.main.async {
                 self.appsList = decoded.apps
+                // خوێندنەوەی بەشی News بۆ تابەکان
+                self.newsList = decoded.news ?? []
             }
         } catch {
             print("Error loading apps: \(error)")
@@ -233,7 +261,7 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - App Cell View (Modernized)
+// MARK: - App Cell View
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
@@ -351,7 +379,7 @@ struct AshteHomeAppCell: View {
     }
 }
 
-// MARK: - App Detail View (Modernized)
+// MARK: - App Detail View
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
@@ -365,7 +393,6 @@ struct AshteHomeAppDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Header Image
                 ZStack(alignment: .bottom) {
                     GeometryReader { proxy in
                         let minY = proxy.frame(in: .global).minY
@@ -385,7 +412,6 @@ struct AshteHomeAppDetailView: View {
                     LinearGradient(colors: [Color(UIColor.systemBackground).opacity(0), Color(UIColor.systemBackground)], startPoint: .top, endPoint: .bottom)
                         .frame(height: 100)
                     
-                    // Back Button
                     VStack {
                         HStack {
                             Button(action: { presentationMode.wrappedValue.dismiss() }) {
@@ -405,7 +431,6 @@ struct AshteHomeAppDetailView: View {
                     }
                 }
                 
-                // App Profile
                 VStack(spacing: 16) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -433,7 +458,6 @@ struct AshteHomeAppDetailView: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    // Download Button
                     ZStack {
                         if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                             HStack(spacing: 12) {
@@ -466,7 +490,6 @@ struct AshteHomeAppDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 
-                // Details
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Information")
                         .font(.system(size: 18, weight: .bold, design: .rounded))
