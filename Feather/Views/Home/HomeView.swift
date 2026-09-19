@@ -188,7 +188,7 @@ struct HomeView: View {
     }
     
     private func handleAutoSign() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
             
@@ -265,7 +265,7 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - App Cell View (ئەم بەشە نوێکراوەتەوە بۆ ئەوەی لە دیزاینی SourceAppsCellView بچێت)
+// MARK: - App Cell View
 struct AshteHomeAppCell: View {
     @AppStorage("AshteMobile.storeCellAppearance") private var _storeCellAppearance: Int = 0
     
@@ -276,6 +276,9 @@ struct AshteHomeAppCell: View {
     @State private var downloadProgress: Double = 0
     @State private var cancellable: AnyCancellable?
     @State private var isDownloading = false
+    
+    // ✅ چارەسەری باگی Cancelکردن
+    @State private var isCancelled = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -324,6 +327,8 @@ struct AshteHomeAppCell: View {
                                 .font(.system(size: 10, weight: .black))
                         }
                         .onTapGesture {
+                            // ✅ ڕاگرتنی بە ئەنقەست
+                            isCancelled = true
                             downloadManager.cancelDownload(currentDownload)
                         }
                     } else {
@@ -339,7 +344,6 @@ struct AshteHomeAppCell: View {
                 }
             }
             
-            // App Description (پشت دەبەستێت بە هەڵبژاردەی بەکارهێنەر)
             if _storeCellAppearance != 0, let desc = app.descriptionText {
                 Text(desc)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -360,15 +364,18 @@ struct AshteHomeAppCell: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                AudioServicesPlaySystemSound(1300)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                // ✅ ئەگەر خۆمان کانسڵمان نەکردبێت، با پرۆسەی ساین کردن دەستپێبکات
+                if !isCancelled {
+                    AudioServicesPlaySystemSound(1300)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    onDownloadComplete()
+                }
                 
-                onDownloadComplete()
+                isCancelled = false
             }
         }
     }
     
-    // فەنکشنی ڕێکخستنی وەسف و ڤێرژن وەکو SourceAppsCellView
     private func appDescription() -> String {
         let optionalComponents: [String?] = [
             app.version,
@@ -386,6 +393,7 @@ struct AshteHomeAppCell: View {
     }
     
     private func triggerDownload() {
+        isCancelled = false
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
@@ -424,6 +432,9 @@ struct AshteHomeAppDetailView: View {
     @State private var cancellable: AnyCancellable?
     @State private var isDownloading = false
     
+    // ✅ چارەسەری باگی Cancelکردن لە لاپەڕەی ناوەوە
+    @State private var isCancelled = false
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -451,7 +462,7 @@ struct AshteHomeAppDetailView: View {
                         Spacer()
                         
                         Button(action: {
-                            // Action for share if needed
+                            // Action for share
                         }) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 17, weight: .bold))
@@ -462,7 +473,7 @@ struct AshteHomeAppDetailView: View {
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, UIApplication.shared.windows.first?.safeAreaInsets.top ?? 50)
+                    .padding(.top, 50) // ✅ چاکسازی بۆ پاراستنی بێ کێشەی حاشیەی سەرەوە
                 }
                 
                 // MARK: App Info Header
@@ -502,16 +513,22 @@ struct AshteHomeAppDetailView: View {
                 HStack(spacing: 12) {
                     ZStack {
                         if let currentDownload = downloadManager.getDownload(by: app.stringID) {
-                            ZStack {
-                                Capsule().fill(Color.blue.opacity(0.1))
-                                HStack {
-                                    Text("Downloading...")
-                                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                                        .foregroundColor(.blue)
-                                    Spacer()
-                                    ProgressView()
+                            Button(action: {
+                                isCancelled = true
+                                downloadManager.cancelDownload(currentDownload)
+                            }) {
+                                ZStack {
+                                    Capsule().fill(Color.blue.opacity(0.1))
+                                    HStack {
+                                        Text("Downloading...")
+                                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                                            .foregroundColor(.blue)
+                                        Spacer()
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.blue)
+                                    }
+                                    .padding(.horizontal, 20)
                                 }
-                                .padding(.horizontal, 20)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
                         } else {
@@ -527,7 +544,7 @@ struct AshteHomeAppDetailView: View {
                     }
                     
                     Button(action: {
-                        // Action for secondary button if needed
+                        // Action for secondary button
                     }) {
                         Text("Share")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
@@ -599,15 +616,19 @@ struct AshteHomeAppDetailView: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                AudioServicesPlaySystemSound(1300)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                if !isCancelled {
+                    AudioServicesPlaySystemSound(1300)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    onDownloadComplete()
+                }
                 
-                onDownloadComplete()
+                isCancelled = false
             }
         }
     }
     
     private func triggerDownload() {
+        isCancelled = false
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
