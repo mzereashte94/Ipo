@@ -93,7 +93,6 @@ struct HomeView: View {
         NBNavigationView(.localized("Discover")) {
             ScrollView {
                 VStack(spacing: 0) {
-                    // MARK: - Top Banners Carousel
                     if searchText.isEmpty {
                         TabView {
                             ForEach(banners) { banner in
@@ -122,7 +121,6 @@ struct HomeView: View {
                         .padding(.top, 10)
                     }
                     
-                    // MARK: - Apps List
                     if !filteredApps.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
@@ -144,14 +142,10 @@ struct HomeView: View {
                             
                             LazyVStack(spacing: 0) {
                                 ForEach(filteredApps) { app in
-                                    NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: {
-                                        handleAutoSign(for: app) // 💡 دەبێت ناوی ئەپەکە بدەینە فەنکشنەکە
-                                    })) {
-                                        AshteHomeAppCell(app: app, onDownloadComplete: {
-                                            handleAutoSign(for: app) // 💡 لێرەشدا دەبێت ناوەکەی پاس بدرێت
-                                        })
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 12)
+                                    NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
+                                        AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 12)
                                     }
                                     .buttonStyle(.plain)
                                     
@@ -191,18 +185,15 @@ struct HomeView: View {
         }
     }
     
-    // 💡 گۆڕانکاری بۆ ڕێگریکردن لە واژووکردنی هەڵە
-    private func handleAutoSign(for app: AshteHomeAppModel) {
+    // ڕێک هەمان فەنکشنی خۆتە بەبێ گۆڕانکاری بۆ ئەوەی کامپایل بێت
+    private func handleAutoSign() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
             
-            guard let importedApps = try? Storage.shared.context.fetch(request) else { return }
-            
-            // تەنها ئەو ئەپە دەگرێت کە ناوەکەی یەکسانە بەوەی کلیکت لێکردووە
-            guard let importedApp = importedApps.first(where: {
-                $0.name == app.name || $0.bundleIdentifier == app.bundleIdentifier
-            }) else {
+            guard let importedApps = try? Storage.shared.context.fetch(request),
+                  let importedApp = importedApps.first else {
+                print("No imported app found")
                 return
             }
             
@@ -225,6 +216,8 @@ struct HomeView: View {
                             Storage.shared.deleteApp(for: importedApp)
                         }
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                    } else {
+                        print("Signing Error: \(String(describing: error))")
                     }
                 }
             }
@@ -247,7 +240,6 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Empty State View
 struct AshteHomeEmptyView: View {
     var body: some View {
         if #available(iOS 17, *) {
@@ -271,10 +263,7 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - App Cell View
 struct AshteHomeAppCell: View {
-    @AppStorage("AshteMobile.storeCellAppearance") private var _storeCellAppearance: Int = 0
-    
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
     
@@ -304,7 +293,7 @@ struct AshteHomeAppCell: View {
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
-                    Text(appDescription())
+                    Text("\(app.version ?? "1.0") • \(app.category ?? "Apps")")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
@@ -341,15 +330,6 @@ struct AshteHomeAppCell: View {
                     }
                 }
             }
-            
-            if _storeCellAppearance != 0, let desc = app.descriptionText {
-                Text(desc)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                    .padding(.top, 2)
-            }
         }
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
@@ -362,7 +342,7 @@ struct AshteHomeAppCell: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                // 💡 تەنها ئەگەر گەیشتە سەروو ٩٨٪ ئەوا دەست دەکات بە ئینستاڵ
+                // 💡 چارەسەری کێشەکە لێرەدایە
                 if downloadProgress >= 0.98 {
                     AudioServicesPlaySystemSound(1300)
                     let generator = UINotificationFeedbackGenerator()
@@ -371,22 +351,6 @@ struct AshteHomeAppCell: View {
                 }
             }
         }
-    }
-    
-    private func appDescription() -> String {
-        let optionalComponents: [String?] = [
-            app.version,
-            app.category ?? "Apps"
-        ]
-        
-        let components: [String] = optionalComponents.compactMap { value in
-            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
-                return nil
-            }
-            return trimmed
-        }
-        
-        return components.joined(separator: " • ")
     }
     
     private func triggerDownload() {
@@ -417,7 +381,6 @@ struct AshteHomeAppCell: View {
     }
 }
 
-// MARK: - App Detail View
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
@@ -431,7 +394,6 @@ struct AshteHomeAppDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                
                 ZStack(alignment: .topLeading) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill).blur(radius: 40)
@@ -453,8 +415,7 @@ struct AshteHomeAppDetailView: View {
                         }
                         Spacer()
                         
-                        Button(action: {
-                        }) {
+                        Button(action: {}) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 17, weight: .bold))
                                 .foregroundColor(.white)
@@ -526,8 +487,7 @@ struct AshteHomeAppDetailView: View {
                         }
                     }
                     
-                    Button(action: {
-                    }) {
+                    Button(action: {}) {
                         Text("Share")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
@@ -595,7 +555,6 @@ struct AshteHomeAppDetailView: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                // 💡 چارەسەری هەمان کێشە لە پەنجەرەی ناوەوەش
                 if downloadProgress >= 0.98 {
                     AudioServicesPlaySystemSound(1300)
                     let generator = UINotificationFeedbackGenerator()
@@ -634,7 +593,6 @@ struct AshteHomeAppDetailView: View {
     }
 }
 
-// MARK: - Subcomponents
 struct AshtePillView: View {
     let icon: String
     let text: String
