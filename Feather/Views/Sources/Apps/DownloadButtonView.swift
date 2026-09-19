@@ -67,13 +67,16 @@ struct DownloadButtonView: View {
 		.onChange(of: downloadManager.downloads.description) { _ in
 			setupObserver()
             
-            // 💡 لێرەدا چاودێری دەکەین بزانین کەی داونلۆدەکە لە لیستەکە نامێنێت (واتە تەواو دەبێت)
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.currentUniqueId) != nil
             if isCurrentlyDownloading {
                 isDownloading = true
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
-                handleDownloadCompletion() // کاتێک تەواو بوو ئەم فەنکشنە کار دەکات
+                
+                // 💡 چارەسەری سەرەکی: تەنها کاتێک دەست دەکات بە ئینستاڵ کە داونلۆدەکە بە تەواوی تەواو بووبێت
+                if downloadProgress >= 0.98 {
+                    handleDownloadCompletion()
+                }
             }
 		}
 		.animation(.easeInOut(duration: 0.3), value: downloadManager.getDownload(by: app.currentUniqueId) != nil)
@@ -99,20 +102,22 @@ struct DownloadButtonView: View {
     
     // 💡 پرۆسەی جیاکردنەوەی هەردوو شێوازی (Server و idevice) لە کاتی تەواوبوونی داونلۆد
     private func handleDownloadCompletion() {
-        // ئەگەر لەسەر idevice (1) بوو، تەنها لەرزینێک دەکات و دەوەستێت (دەچێتە Library)
         if installationMethod == 1 {
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
             return
         }
         
-        // ئەگەر لەسەر Server (0) بوو، پرۆسەی واژووکردنی ئۆتۆماتیکی دەست پێ دەکات
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
             
-            guard let importedApps = try? Storage.shared.context.fetch(request),
-                  let importedApp = importedApps.first else {
+            guard let importedApps = try? Storage.shared.context.fetch(request) else { return }
+            
+            // 💡 دڵنیابوونەوە لەوەی کە هەمان ئەو ئەپەیە کە ئێستا دابەزیوە بۆ ئەوەی ئەپێکی تر ئینستاڵ نەکاتەوە
+            guard let importedApp = importedApps.first(where: {
+                $0.name == app.currentName || $0.bundleIdentifier == app.bundleIdentifier
+            }) else {
                 return
             }
             
@@ -134,7 +139,6 @@ struct DownloadButtonView: View {
                         if options.post_deleteAppAfterSigned {
                             Storage.shared.deleteApp(for: importedApp)
                         }
-                        // ناردنی نۆتیفیکەیشنی فەرمی بۆ هێنانە سەر شاشەی Install
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
                     }
                 }
