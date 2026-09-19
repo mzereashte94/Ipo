@@ -265,7 +265,7 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - App Cell View (ئەم بەشە نوێکراوەتەوە بۆ ئەوەی لە دیزاینی SourceAppsCellView بچێت)
+// MARK: - App Cell View
 struct AshteHomeAppCell: View {
     @AppStorage("AshteMobile.storeCellAppearance") private var _storeCellAppearance: Int = 0
     
@@ -339,7 +339,6 @@ struct AshteHomeAppCell: View {
                 }
             }
             
-            // App Description (پشت دەبەستێت بە هەڵبژاردەی بەکارهێنەر)
             if _storeCellAppearance != 0, let desc = app.descriptionText {
                 Text(desc)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -360,15 +359,16 @@ struct AshteHomeAppCell: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                AudioServicesPlaySystemSound(1300)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                
-                onDownloadComplete()
+                // 💡 چارەسەری کێشەکە: تەنها کاتێک ئینستاڵ دەبێت ئەگەر داونلۆدەکە تەواو بووبێت
+                if downloadProgress >= 0.98 {
+                    AudioServicesPlaySystemSound(1300)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    onDownloadComplete()
+                }
             }
         }
     }
     
-    // فەنکشنی ڕێکخستنی وەسف و ڤێرژن وەکو SourceAppsCellView
     private func appDescription() -> String {
         let optionalComponents: [String?] = [
             app.version,
@@ -599,10 +599,12 @@ struct AshteHomeAppDetailView: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                AudioServicesPlaySystemSound(1300)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                
-                onDownloadComplete()
+                // 💡 هەمان چارەسەر بۆ شاشەی وردەکارییەکان
+                if downloadProgress >= 0.98 {
+                    AudioServicesPlaySystemSound(1300)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    onDownloadComplete()
+                }
             }
         }
     }
