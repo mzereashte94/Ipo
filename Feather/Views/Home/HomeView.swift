@@ -93,7 +93,6 @@ struct HomeView: View {
         NBNavigationView(.localized("Discover")) {
             ScrollView {
                 VStack(spacing: 0) {
-                    // MARK: - Top Banners Carousel
                     if searchText.isEmpty {
                         TabView {
                             ForEach(banners) { banner in
@@ -122,7 +121,6 @@ struct HomeView: View {
                         .padding(.top, 10)
                     }
                     
-                    // MARK: - Apps List
                     if !filteredApps.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
@@ -144,10 +142,14 @@ struct HomeView: View {
                             
                             LazyVStack(spacing: 0) {
                                 ForEach(filteredApps) { app in
-                                    NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
-                                        AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
-                                            .padding(.horizontal, 20)
-                                            .padding(.vertical, 12)
+                                    NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: { downloadedApp in
+                                        handleAutoSign(for: downloadedApp)
+                                    })) {
+                                        AshteHomeAppCell(app: app, onDownloadComplete: { downloadedApp in
+                                            handleAutoSign(for: downloadedApp)
+                                        })
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 12)
                                     }
                                     .buttonStyle(.plain)
                                     
@@ -187,15 +189,24 @@ struct HomeView: View {
         }
     }
     
-    private func handleAutoSign() {
+    private func handleAutoSign(for app: AshteHomeAppModel) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
             
-            guard let importedApps = try? Storage.shared.context.fetch(request),
-                  let importedApp = importedApps.first else {
-                print("No imported app found")
+            guard let importedApps = try? Storage.shared.context.fetch(request) else { return }
+            
+            guard let importedApp = importedApps.first(where: {
+                $0.name == app.name || $0.bundleIdentifier == app.bundleIdentifier
+            }) else {
                 return
+            }
+            
+            if let importDate = importedApp.date {
+                let timeSinceImport = Date().timeIntervalSince(importDate)
+                if timeSinceImport > 300 { 
+                    return
+                }
             }
             
             let options = OptionsManager.shared.options
@@ -217,8 +228,6 @@ struct HomeView: View {
                             Storage.shared.deleteApp(for: importedApp)
                         }
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
-                    } else {
-                        print("Signing Error: \(String(describing: error))")
                     }
                 }
             }
@@ -270,7 +279,7 @@ struct AshteHomeAppCell: View {
     @AppStorage("AshteMobile.storeCellAppearance") private var _storeCellAppearance: Int = 0
     
     let app: AshteHomeAppModel
-    var onDownloadComplete: () -> Void
+    var onDownloadComplete: (AshteHomeAppModel) -> Void 
     
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
@@ -280,7 +289,6 @@ struct AshteHomeAppCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                // Icon
                 AsyncImage(url: app.fullImageURL) { image in
                     image.resizable().aspectRatio(contentMode: .fill)
                 } placeholder: {
@@ -293,7 +301,6 @@ struct AshteHomeAppCell: View {
                         .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
                 )
                 
-                // Title and Subtitle
                 VStack(alignment: .leading, spacing: 4) {
                     Text(app.name)
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
@@ -308,7 +315,6 @@ struct AshteHomeAppCell: View {
                 
                 Spacer()
                 
-                // Download Button
                 ZStack {
                     if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                         ZStack {
@@ -350,7 +356,7 @@ struct AshteHomeAppCell: View {
         }
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
-        .onChange(of: downloadManager.downloads.count) { _ in
+        .onChange(of: downloadManager.downloads.description) { _ in
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
             
             if isCurrentlyDownloading {
@@ -359,11 +365,11 @@ struct AshteHomeAppCell: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                // 💡 چارەسەری کێشەکە: تەنها کاتێک ئینستاڵ دەبێت ئەگەر داونلۆدەکە تەواو بووبێت
                 if downloadProgress >= 0.98 {
                     AudioServicesPlaySystemSound(1300)
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    onDownloadComplete()
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                    onDownloadComplete(app) 
                 }
             }
         }
@@ -416,7 +422,7 @@ struct AshteHomeAppCell: View {
 // MARK: - App Detail View
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
-    var onDownloadComplete: () -> Void
+    var onDownloadComplete: (AshteHomeAppModel) -> Void 
     @Environment(\.presentationMode) var presentationMode
     
     @ObservedObject private var downloadManager = DownloadManager.shared
@@ -427,8 +433,6 @@ struct AshteHomeAppDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                
-                // MARK: Top Banner Blur
                 ZStack(alignment: .topLeading) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill).blur(radius: 40)
@@ -451,7 +455,6 @@ struct AshteHomeAppDetailView: View {
                         Spacer()
                         
                         Button(action: {
-                            // Action for share if needed
                         }) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 17, weight: .bold))
@@ -465,7 +468,6 @@ struct AshteHomeAppDetailView: View {
                     .padding(.top, UIApplication.shared.windows.first?.safeAreaInsets.top ?? 50)
                 }
                 
-                // MARK: App Info Header
                 HStack(alignment: .top, spacing: 16) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -498,7 +500,6 @@ struct AshteHomeAppDetailView: View {
                 }
                 .padding(.horizontal, 20)
                 
-                // MARK: Action Buttons
                 HStack(spacing: 12) {
                     ZStack {
                         if let currentDownload = downloadManager.getDownload(by: app.stringID) {
@@ -527,7 +528,6 @@ struct AshteHomeAppDetailView: View {
                     }
                     
                     Button(action: {
-                        // Action for secondary button if needed
                     }) {
                         Text("Share")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
@@ -540,7 +540,6 @@ struct AshteHomeAppDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 
-                // MARK: Quick Info Pills
                 HStack(spacing: 10) {
                     AshtePillView(icon: "tag", text: app.version ?? "1.0")
                     AshtePillView(icon: "shippingbox", text: app.size ?? "Unknown")
@@ -552,7 +551,6 @@ struct AshteHomeAppDetailView: View {
                     .padding(.top, 20)
                     .padding(.horizontal, 20)
                 
-                // MARK: Description Section
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Description")
                         .font(.title3)
@@ -571,7 +569,6 @@ struct AshteHomeAppDetailView: View {
                     .padding(.vertical, 20)
                     .padding(.horizontal, 20)
                 
-                // MARK: Information List
                 VStack(alignment: .leading, spacing: 15) {
                     Text("Information")
                         .font(.title3)
@@ -590,7 +587,7 @@ struct AshteHomeAppDetailView: View {
         .navigationBarHidden(true)
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
-        .onChange(of: downloadManager.downloads.count) { _ in
+        .onChange(of: downloadManager.downloads.description) { _ in
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
             
             if isCurrentlyDownloading {
@@ -599,11 +596,11 @@ struct AshteHomeAppDetailView: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                // 💡 هەمان چارەسەر بۆ شاشەی وردەکارییەکان
                 if downloadProgress >= 0.98 {
                     AudioServicesPlaySystemSound(1300)
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    onDownloadComplete()
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                    onDownloadComplete(app) 
                 }
             }
         }
