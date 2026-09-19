@@ -9,7 +9,8 @@ import SwiftUI
 import Combine
 import AltSourceKit
 import NimbleViews
-import CoreData // 💡 زیادکرا بۆ ئەوەی دەستمان بە داتابەیس بگات بۆ واژووکردن
+import CoreData 
+import UIKit 
 
 struct DownloadButtonView: View {
 	let app: ASRepository.App
@@ -18,7 +19,6 @@ struct DownloadButtonView: View {
 	@State private var downloadProgress: Double = 0
 	@State private var cancellable: AnyCancellable?
     
-    // 💡 زیادکراوەکان بۆ چاودێریکردنی تەواوبوونی داونلۆد و زانینی جۆری ئینستاڵ
     @State private var isDownloading = false
     @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
 
@@ -73,7 +73,7 @@ struct DownloadButtonView: View {
             } else if isDownloading && !isCurrentlyDownloading {
                 isDownloading = false
                 
-                // 💡 چارەسەری سەرەکی: تەنها کاتێک دەست دەکات بە ئینستاڵ کە داونلۆدەکە بە تەواوی تەواو بووبێت
+                // 💡 چارەسەری کێشەکە لێرەدایە
                 if downloadProgress >= 0.98 {
                     handleDownloadCompletion()
                 }
@@ -100,7 +100,7 @@ struct DownloadButtonView: View {
 		}
 	}
     
-    // 💡 پرۆسەی جیاکردنەوەی هەردوو شێوازی (Server و idevice) لە کاتی تەواوبوونی داونلۆد
+    // ڕێک هەمان فەنکشنی خۆتە بەبێ گۆڕانکاری
     private func handleDownloadCompletion() {
         if installationMethod == 1 {
             let generator = UINotificationFeedbackGenerator()
@@ -112,12 +112,8 @@ struct DownloadButtonView: View {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
             
-            guard let importedApps = try? Storage.shared.context.fetch(request) else { return }
-            
-            // 💡 دڵنیابوونەوە لەوەی کە هەمان ئەو ئەپەیە کە ئێستا دابەزیوە بۆ ئەوەی ئەپێکی تر ئینستاڵ نەکاتەوە
-            guard let importedApp = importedApps.first(where: {
-                $0.name == app.currentName || $0.bundleIdentifier == app.bundleIdentifier
-            }) else {
+            guard let importedApps = try? Storage.shared.context.fetch(request),
+                  let importedApp = importedApps.first else {
                 return
             }
             
