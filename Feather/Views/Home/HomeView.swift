@@ -68,7 +68,7 @@ struct HomeView: View {
     
     @State private var _selectedInstallAppPresenting: AnyApp?
     
-    // 💡 گۆڕاوەکە لێرەدا زیاد کرا بۆ جیاکردنەوەی Server و idevice
+    // 💡 زیادکردنی خوێندنەوەی جۆری ئینستاڵکردن لە ڕێکخستنەکانەوە
     @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
     
     @FetchRequest(
@@ -145,15 +145,10 @@ struct HomeView: View {
                             
                             LazyVStack(spacing: 0) {
                                 ForEach(filteredApps) { app in
-                                    // 💡 پاسدانی parameter ەکە چاککرا بۆ ئەوەی ئیرۆر نەدات
-                                    NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: { _ in 
-                                        handleAutoSign() 
-                                    })) {
-                                        AshteHomeAppCell(app: app, onDownloadComplete: { _ in 
-                                            handleAutoSign() 
-                                        })
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 12)
+                                    NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
+                                        AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 12)
                                     }
                                     .buttonStyle(.plain)
                                     
@@ -278,8 +273,7 @@ struct AshteHomeEmptyView: View {
 
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
-    // 💡 پارامێتەرەکە گەڕێنرایەوە بۆ ئەوەی لە فایلەکانی تر کێشە دروست نەکات
-    var onDownloadComplete: (AshteHomeAppModel) -> Void
+    var onDownloadComplete: () -> Void
     
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
@@ -347,7 +341,7 @@ struct AshteHomeAppCell: View {
         }
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
-        .onChange(of: downloadManager.downloads.description) { _ in
+        .onChange(of: downloadManager.downloads.count) { _ in
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
             
             if isCurrentlyDownloading {
@@ -360,7 +354,7 @@ struct AshteHomeAppCell: View {
                     AudioServicesPlaySystemSound(1300)
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    onDownloadComplete(app) // 💡 گەڕاندنەوەی پارامێتەرەکە
+                    onDownloadComplete()
                 }
             }
         }
@@ -396,8 +390,7 @@ struct AshteHomeAppCell: View {
 
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
-    // 💡 پارامێتەرەکە گەڕێنرایەوە بۆ ئەوەی لە فایلەکانی تر کێشە دروست نەکات
-    var onDownloadComplete: (AshteHomeAppModel) -> Void
+    var onDownloadComplete: () -> Void
     @Environment(\.presentationMode) var presentationMode
     
     @ObservedObject private var downloadManager = DownloadManager.shared
@@ -560,7 +553,7 @@ struct AshteHomeAppDetailView: View {
         .navigationBarHidden(true)
         .onAppear(perform: setupObserver)
         .onDisappear { cancellable?.cancel() }
-        .onChange(of: downloadManager.downloads.description) { _ in
+        .onChange(of: downloadManager.downloads.count) { _ in
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
             
             if isCurrentlyDownloading {
@@ -573,7 +566,7 @@ struct AshteHomeAppDetailView: View {
                     AudioServicesPlaySystemSound(1300)
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
-                    onDownloadComplete(app) // 💡 گەڕاندنەوەی پارامێتەرەکە
+                    onDownloadComplete()
                 }
             }
         }
