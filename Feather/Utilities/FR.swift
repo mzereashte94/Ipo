@@ -71,7 +71,7 @@ enum FR {
                     if options.post_deleteAppAfterSigned {
                         Storage.shared.deleteApp(for: importedApp)
                     }
-                    NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                    // 💡 چارەسەر: هێڵی نۆتیفیکەیشنی ئینستاڵ سڕایەوە بۆ ئەوەی دوو جار داوای ئینستاڵ نەکات
                 } else {
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.error)
