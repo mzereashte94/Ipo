@@ -20,11 +20,26 @@ struct DownloadButtonView: View {
 	@State private var cancellable: AnyCancellable?
     
     @State private var isDownloading = false
-    @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
+    @State private var isSigning = false // 💡 ئەمەمان زیاد کرد بۆ نیشاندانی دیزاینی واژووکردن
+    
+    // تێبینی: installationMethod پێویست ناکات، چونکە هەموو شێوازەکان پێویستیان بە Signing هەیە
 
 	var body: some View {
 		ZStack {
-			if let currentDownload = downloadManager.getDownload(by: app.currentUniqueId) {
+            if isSigning {
+                // 💡 شێوازی نوێ لە کاتی واژووکردندا ڕێک وەکو بەشی Home
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(.localized("Signing..."))
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Color.accentColor)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(Color(uiColor: .quaternarySystemFill))
+                .clipShape(Capsule())
+            } else if let currentDownload = downloadManager.getDownload(by: app.currentUniqueId) {
 				ZStack {
 					Circle()
 						.trim(from: 0, to: downloadProgress)
@@ -74,11 +89,13 @@ struct DownloadButtonView: View {
                 isDownloading = false
                 
                 if downloadProgress >= 0.98 {
+                    isSigning = true // 💡 داونلۆد تەواو بوو، ڕاستەوخۆ دەگۆڕێت بۆ دۆخی واژووکردن
                     handleDownloadCompletion()
                 }
             }
 		}
 		.animation(.easeInOut(duration: 0.3), value: downloadManager.getDownload(by: app.currentUniqueId) != nil)
+        .animation(.easeInOut(duration: 0.3), value: isSigning) // ئەنیمەیشنی نەرم بۆ دەرکەوتنی دوگمەی Signing
 	}
 
 	private func setupObserver() {
@@ -103,18 +120,17 @@ struct DownloadButtonView: View {
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
         
-        // 💡 ئەگەر لەسەر idevice بێت (1)، تەنها دەچێتە لایبری و واژووی ناکات
-        if installationMethod == 1 {
-            return
-        }
-        
-        // 💡 ئەگەر لەسەر Server بێت (0)، پرۆسەی واژووکردن و ئینستاڵ دەست پێ دەکات
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        // 💡 چاوەڕێ دەکەین تا فایلی ipa بە تەواوی دەچێتە ناو کۆگا (CoreData)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
+            
+            // 💡 دۆزینەوەی ئەپەکە بە وردی بەپێی ناو یان Bundle ID بۆ ئەوەی ئەپێکی هەڵە واژوو نەکەین
+            request.predicate = NSPredicate(format: "name == %@ OR bundleIdentifier == %@", app.currentName, app.id ?? "")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
             
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
+                self.isSigning = false
                 return
             }
             
@@ -125,6 +141,7 @@ struct DownloadButtonView: View {
             let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
             let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
             
+            // 💡 دەستپێکردنی واژووکردن (Signing)
             FR.signPackageFile(
                 importedApp,
                 using: options,
@@ -132,11 +149,19 @@ struct DownloadButtonView: View {
                 certificate: selectedCert
             ) { error in
                 DispatchQueue.main.async {
+                    self.isSigning = false // واژووکردن تەواو بوو
+                    
                     if error == nil {
                         if options.post_deleteAppAfterSigned {
                             Storage.shared.deleteApp(for: importedApp)
                         }
+                        
+                        // 💡 ناردنی نۆتیفیکەیشن بۆ دەستپێکردنی ئینستاڵ ڕاستەوخۆ دوای واژووکردن
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                    } else {
+                        // لێرەدا دەتوانیت ئیرۆر نیشان بدەیت ئەگەر کێشەیەک ڕوویدا
+                        let errorGenerator = UINotificationFeedbackGenerator()
+                        errorGenerator.notificationOccurred(.error)
                     }
                 }
             }
