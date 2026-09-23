@@ -12,6 +12,11 @@ import NimbleViews
 import CoreData
 import UIKit
 
+// 💡 قفڵێکی گشتی بۆ ڕێگریکردن لە دوو جار جێبەجێبوونی فەرمانەکان لە یەک کاتدا
+class SigningLock {
+	static var activeSigningId: String? = nil
+}
+
 struct DownloadButtonView: View {
 	let app: ASRepository.App
 	@ObservedObject private var downloadManager = DownloadManager.shared
@@ -91,7 +96,7 @@ struct DownloadButtonView: View {
 					let generator = UINotificationFeedbackGenerator()
 					generator.notificationOccurred(.success)
 					isSigning = true
-					handleAutoSign() // 💡 ڕێک هەمان لۆژیکی بەشی Home
+					handleAutoSign()
 				}
 			}
 		}
@@ -117,21 +122,28 @@ struct DownloadButtonView: View {
 		}
 	}
     
-	// 💡 ئەم فەنکشنە ڕێک وەک ئەوەی HomeView کۆپی کراوە
 	private func handleAutoSign() {
 		if installationMethod == 1 {
 			self.isSigning = false
 			return
 		}
         
-		DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+		// 💡 دڵنیابوونەوە لەوەی تەنها یەک جار فەرمانەکە دەڕوات تەنانەت ئەگەر دوو پەڕەش لە یەک کاتدا داوای بکەن
+		if SigningLock.activeSigningId == app.currentUniqueId {
+			self.isSigning = false
+			return
+		}
+		SigningLock.activeSigningId = app.currentUniqueId // دانانی قفڵەکە
+        
+		DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
 			let request = NSFetchRequest<Imported>(entityName: "Imported")
 			request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
+			request.fetchLimit = 1 
             
-			// بەبێ گەڕان بەدوای ناو، ڕاستەوخۆ دوایین ئەپ دەگرێت
 			guard let importedApps = try? Storage.shared.context.fetch(request),
 				  let importedApp = importedApps.first else {
 				self.isSigning = false
+				SigningLock.activeSigningId = nil
 				return
 			}
             
@@ -150,10 +162,13 @@ struct DownloadButtonView: View {
 			) { error in
 				DispatchQueue.main.async {
 					self.isSigning = false
+					SigningLock.activeSigningId = nil // کردنەوەی قفڵەکە دوای تەواوبوون
+                    
 					if error == nil {
 						if options.post_deleteAppAfterSigned {
 							Storage.shared.deleteApp(for: importedApp)
 						}
+						// ئیتر تەنها یەک جار نامەی ئینستاڵ دەڕوات
 						NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
 					} else {
 						let errorGenerator = UINotificationFeedbackGenerator()
