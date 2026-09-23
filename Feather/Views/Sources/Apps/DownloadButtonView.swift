@@ -20,14 +20,11 @@ struct DownloadButtonView: View {
 	@State private var cancellable: AnyCancellable?
     
     @State private var isDownloading = false
-    @State private var isSigning = false // 💡 ئەمەمان زیاد کرد بۆ نیشاندانی دیزاینی واژووکردن
+    @State private var isSigning = false
     
-    // تێبینی: installationMethod پێویست ناکات، چونکە هەموو شێوازەکان پێویستیان بە Signing هەیە
-
 	var body: some View {
 		ZStack {
             if isSigning {
-                // 💡 شێوازی نوێ لە کاتی واژووکردندا ڕێک وەکو بەشی Home
                 HStack(spacing: 6) {
                     ProgressView()
                         .controlSize(.small)
@@ -89,13 +86,13 @@ struct DownloadButtonView: View {
                 isDownloading = false
                 
                 if downloadProgress >= 0.98 {
-                    isSigning = true // 💡 داونلۆد تەواو بوو، ڕاستەوخۆ دەگۆڕێت بۆ دۆخی واژووکردن
+                    isSigning = true
                     handleDownloadCompletion()
                 }
             }
 		}
 		.animation(.easeInOut(duration: 0.3), value: downloadManager.getDownload(by: app.currentUniqueId) != nil)
-        .animation(.easeInOut(duration: 0.3), value: isSigning) // ئەنیمەیشنی نەرم بۆ دەرکەوتنی دوگمەی Signing
+        .animation(.easeInOut(duration: 0.3), value: isSigning)
 	}
 
 	private func setupObserver() {
@@ -120,49 +117,64 @@ struct DownloadButtonView: View {
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
         
-        // 💡 چاوەڕێ دەکەین تا فایلی ipa بە تەواوی دەچێتە ناو کۆگا (CoreData)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        // دەست دەکەین بە گەڕان بەدوای ئەپەکەدا
+        pollForImportedApp(attempts: 0)
+    }
+    
+    // 💡 ئەم فەنکشنە نوێیە بەردەوام دەگەڕێت تا ئەپەکە دەگاتە ناو Library
+    private func pollForImportedApp(attempts: Int) {
+        // ئەگەر دوای ١٥ چرکە نەیگواستەوە، واز دەهێنێت (واتە ٣٠ هەوڵ)
+        guard attempts < 30 else {
+            self.isSigning = false
+            return
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
-            
-            // 💡 دۆزینەوەی ئەپەکە بە وردی بەپێی ناو یان Bundle ID بۆ ئەوەی ئەپێکی هەڵە واژوو نەکەین
-            request.predicate = NSPredicate(format: "name == %@ OR bundleIdentifier == %@", app.currentName, app.id ?? "")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
+            request.fetchLimit = 1
             
-            guard let importedApps = try? Storage.shared.context.fetch(request),
-                  let importedApp = importedApps.first else {
-                self.isSigning = false
-                return
+            if let importedApps = try? Storage.shared.context.fetch(request),
+               let newestApp = importedApps.first,
+               let appDate = newestApp.date {
+                
+                // دڵنیا دەبینەوە کە ئەمە ئەپێکی تازەیە (لە ماوەی ٦٠ چرکەی ڕابردوودا هاتووە)
+                if abs(appDate.timeIntervalSinceNow) < 60 {
+                    self.startSigningProcess(for: newestApp)
+                    return
+                }
             }
             
-            let options = OptionsManager.shared.options
-            let certRequest = NSFetchRequest<CertificatePair>(entityName: "CertificatePair")
-            certRequest.sortDescriptors = [NSSortDescriptor(keyPath: \CertificatePair.date, ascending: false)]
-            let certs = try? Storage.shared.context.fetch(certRequest)
-            let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
-            let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
-            
-            // 💡 دەستپێکردنی واژووکردن (Signing)
-            FR.signPackageFile(
-                importedApp,
-                using: options,
-                icon: nil,
-                certificate: selectedCert
-            ) { error in
-                DispatchQueue.main.async {
-                    self.isSigning = false // واژووکردن تەواو بوو
-                    
-                    if error == nil {
-                        if options.post_deleteAppAfterSigned {
-                            Storage.shared.deleteApp(for: importedApp)
-                        }
-                        
-                        // 💡 ناردنی نۆتیفیکەیشن بۆ دەستپێکردنی ئینستاڵ ڕاستەوخۆ دوای واژووکردن
-                        NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
-                    } else {
-                        // لێرەدا دەتوانیت ئیرۆر نیشان بدەیت ئەگەر کێشەیەک ڕوویدا
-                        let errorGenerator = UINotificationFeedbackGenerator()
-                        errorGenerator.notificationOccurred(.error)
+            // ئەگەر نەیدۆزیەوە، دووبارە هەوڵ دەداتەوە
+            self.pollForImportedApp(attempts: attempts + 1)
+        }
+    }
+    
+    private func startSigningProcess(for importedApp: Imported) {
+        let options = OptionsManager.shared.options
+        let certRequest = NSFetchRequest<CertificatePair>(entityName: "CertificatePair")
+        certRequest.sortDescriptors = [NSSortDescriptor(keyPath: \CertificatePair.date, ascending: false)]
+        let certs = try? Storage.shared.context.fetch(certRequest)
+        let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
+        let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
+        
+        FR.signPackageFile(
+            importedApp,
+            using: options,
+            icon: nil,
+            certificate: selectedCert
+        ) { error in
+            DispatchQueue.main.async {
+                self.isSigning = false
+                
+                if error == nil {
+                    if options.post_deleteAppAfterSigned {
+                        Storage.shared.deleteApp(for: importedApp)
                     }
+                    NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
+                } else {
+                    let errorGenerator = UINotificationFeedbackGenerator()
+                    errorGenerator.notificationOccurred(.error)
                 }
             }
         }
