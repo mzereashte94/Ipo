@@ -11,7 +11,6 @@ import Zsign
 import NimbleJSON
 import AltSourceKit
 import IDeviceSwift
-import CoreData // 💡 زیادکرا بۆ بەکارهێنانی NSFetchRequest
 
 enum FR {
 	static func handlePackageFile(
@@ -30,11 +29,6 @@ enum FR {
 				try? await handler.clean()
 				await MainActor.run {
 					completion(nil)
-                    
-                    // 💡 چارەسەری کۆتایی: ئەگەر بەرنامەکە لە سۆرسەکانەوە داونلۆد کرابێت، ڕاستەوخۆ دەست بکە بە واژووکردنی
-                    if download != nil {
-                        _autoSignLatestApp()
-                    }
 				}
 			} catch {
 				try? await handler.clean()
@@ -44,41 +38,6 @@ enum FR {
 			}
 		}
 	}
-    
-    // 💡 ئەم فەنکشنە نوێیە تایبەتە بە واژووکردنی خێرای دوایین ئەپ کە هاتووەتە ناو Library
-    private static func _autoSignLatestApp() {
-        let request = NSFetchRequest<Imported>(entityName: "Imported")
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
-        request.fetchLimit = 1
-        
-        guard let importedApp = try? Storage.shared.context.fetch(request).first else { return }
-        
-        let options = OptionsManager.shared.options
-        let certRequest = NSFetchRequest<CertificatePair>(entityName: "CertificatePair")
-        certRequest.sortDescriptors = [NSSortDescriptor(keyPath: \CertificatePair.date, ascending: false)]
-        let certs = try? Storage.shared.context.fetch(certRequest)
-        let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
-        let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
-        
-        FR.signPackageFile(
-            importedApp,
-            using: options,
-            icon: nil,
-            certificate: selectedCert
-        ) { error in
-            DispatchQueue.main.async {
-                if error == nil {
-                    if options.post_deleteAppAfterSigned {
-                        Storage.shared.deleteApp(for: importedApp)
-                    }
-                    // 💡 چارەسەر: هێڵی نۆتیفیکەیشنی ئینستاڵ سڕایەوە بۆ ئەوەی دوو جار داوای ئینستاڵ نەکات
-                } else {
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.error)
-                }
-            }
-        }
-    }
 	
 	static func signPackageFile(
 		_ app: AppInfoPresentable,
