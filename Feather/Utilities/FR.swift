@@ -11,6 +11,7 @@ import Zsign
 import NimbleJSON
 import AltSourceKit
 import IDeviceSwift
+import CoreData
 
 enum FR {
 	static func handlePackageFile(
@@ -29,11 +30,47 @@ enum FR {
 				try? await handler.clean()
 				await MainActor.run {
 					completion(nil)
+					if download != nil {
+						_autoSignLatestApp()
+					}
 				}
 			} catch {
 				try? await handler.clean()
 				await MainActor.run {
 					completion(error)
+				}
+			}
+		}
+	}
+
+	private static func _autoSignLatestApp() {
+		let request = NSFetchRequest<Imported>(entityName: "Imported")
+		request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
+		request.fetchLimit = 1
+
+		guard let importedApp = try? Storage.shared.context.fetch(request).first else { return }
+
+		let options = OptionsManager.shared.options
+		let certRequest = NSFetchRequest<CertificatePair>(entityName: "CertificatePair")
+		certRequest.sortDescriptors = [NSSortDescriptor(keyPath: \CertificatePair.date, ascending: false)]
+		let certs = try? Storage.shared.context.fetch(certRequest)
+		let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
+		let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
+
+		FR.signPackageFile(
+			importedApp,
+			using: options,
+			icon: nil,
+			certificate: selectedCert
+		) { error in
+			DispatchQueue.main.async {
+				if error == nil {
+					if options.post_deleteAppAfterSigned {
+						Storage.shared.deleteApp(for: importedApp)
+					}
+				} else {
+					let generator = UINotificationFeedbackGenerator()
+					generator.notificationOccurred(.error)
 				}
 			}
 		}
@@ -121,7 +158,6 @@ enum FR {
 		let dest = URL.documentsDirectory.appendingPathComponent("pairingFile.plist")
 		
 		try? fileManager.removeFileIfNeeded(at: dest)
-		
 		try? fileManager.copyItem(at: url, to: dest)
 		
 		HeartbeatManager.shared.start(true)
@@ -181,7 +217,6 @@ enum FR {
 	}
 	
 	static func exportCertificateAndOpenUrl(using template: String) {
-		// Helper that performs the export for a given certificate
 		func performExport(for certificate: CertificatePair) {
 			guard
 				let certificateKeyFile = Storage.shared.getFile(.certificate, from: certificate),
