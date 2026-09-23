@@ -9,8 +9,6 @@ import SwiftUI
 import Combine
 import AltSourceKit
 import NimbleViews
-import CoreData 
-import UIKit 
 
 struct DownloadButtonView: View {
 	let app: ASRepository.App
@@ -18,25 +16,10 @@ struct DownloadButtonView: View {
 
 	@State private var downloadProgress: Double = 0
 	@State private var cancellable: AnyCancellable?
-    
-    @State private var isDownloading = false
-    @State private var isSigning = false
-    
+
 	var body: some View {
 		ZStack {
-            if isSigning {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(.localized("Signing..."))
-                        .font(.subheadline.bold())
-                        .foregroundStyle(Color.accentColor)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .background(Color(uiColor: .quaternarySystemFill))
-                .clipShape(Capsule())
-            } else if let currentDownload = downloadManager.getDownload(by: app.currentUniqueId) {
+			if let currentDownload = downloadManager.getDownload(by: app.currentUniqueId) {
 				ZStack {
 					Circle()
 						.trim(from: 0, to: downloadProgress)
@@ -78,25 +61,8 @@ struct DownloadButtonView: View {
 		.onDisappear { cancellable?.cancel() }
 		.onChange(of: downloadManager.downloads.description) { _ in
 			setupObserver()
-            
-            let isCurrentlyDownloading = downloadManager.getDownload(by: app.currentUniqueId) != nil
-            if isCurrentlyDownloading {
-                isDownloading = true
-            } else if isDownloading && !isCurrentlyDownloading {
-                isDownloading = false
-                
-                // گەیشتە کۆتایی داونلۆد
-                if downloadProgress >= 0.98 {
-                    isSigning = true
-                    // چاوەڕێی نیو چرکە دەکەین تا داتابەیس بەتەواوی سەیڤ دەبێت پێش واژووکردن
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        handleDownloadCompletion()
-                    }
-                }
-            }
 		}
 		.animation(.easeInOut(duration: 0.3), value: downloadManager.getDownload(by: app.currentUniqueId) != nil)
-        .animation(.easeInOut(duration: 0.3), value: isSigning)
 	}
 
 	private func setupObserver() {
@@ -116,49 +82,4 @@ struct DownloadButtonView: View {
 			downloadProgress = download.overallProgress
 		}
 	}
-    
-    private func handleDownloadCompletion() {
-        let request = NSFetchRequest<Imported>(entityName: "Imported")
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
-        
-        // دۆزینەوەی ئەپەکە بە وردی لەناو داتابەیس
-        guard let importedApps = try? Storage.shared.context.fetch(request),
-              let targetApp = importedApps.first(where: { $0.bundleIdentifier == app.id || $0.name == app.currentName }) else {
-            self.isSigning = false
-            return
-        }
-        
-        let options = OptionsManager.shared.options
-        let certRequest = NSFetchRequest<CertificatePair>(entityName: "CertificatePair")
-        certRequest.sortDescriptors = [NSSortDescriptor(keyPath: \CertificatePair.date, ascending: false)]
-        let certs = try? Storage.shared.context.fetch(certRequest)
-        let storedCertIndex = UserDefaults.standard.integer(forKey: "ashtemobile.selectedCert")
-        let selectedCert = (certs?.indices.contains(storedCertIndex) == true) ? certs![storedCertIndex] : certs?.first
-        
-        FR.signPackageFile(
-            targetApp,
-            using: options,
-            icon: nil,
-            certificate: selectedCert
-        ) { error in
-            DispatchQueue.main.async {
-                self.isSigning = false
-                
-                if error == nil {
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                    
-                    if options.post_deleteAppAfterSigned {
-                        Storage.shared.deleteApp(for: targetApp)
-                    }
-                    
-                    // ناردنی داواکاری ئینستاڵ تەنها یەک جار
-                    NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
-                } else {
-                    let errorGenerator = UINotificationFeedbackGenerator()
-                    errorGenerator.notificationOccurred(.error)
-                }
-            }
-        }
-    }
 }
