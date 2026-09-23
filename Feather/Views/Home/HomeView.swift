@@ -68,8 +68,10 @@ struct HomeView: View {
     
     @State private var _selectedInstallAppPresenting: AnyApp?
     
-    // 💡 زیادکردنی خوێندنەوەی جۆری ئینستاڵکردن لە ڕێکخستنەکانەوە
     @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
+    
+    // 💡 چارەسەر: زیادکردنی قفڵی ڕێگریکردن لە دووبارەبوونەوەی ئینستاڵ
+    @State private var isSigning = false
     
     @FetchRequest(
         entity: Signed.entity(),
@@ -189,19 +191,24 @@ struct HomeView: View {
     }
     
     private func handleAutoSign() {
-        // 💡 ئەگەر لەسەر idevice بێت (1)، تەنها دەچێتە لایبری و واژووی ناکات
+        // 💡 ئەگەر پڕۆسەی واژووکردن لە کاردا بێت، ڕێگە مەدە دووبارە فەرمانەکە وەربگرێتەوە
+        if isSigning { return }
+        isSigning = true
+        
         if installationMethod == 1 {
+            isSigning = false
             return
         }
         
-        // 💡 ئەگەر لەسەر Server بێت (0)، پڕۆسەی واژووکردنەکە بەردەوام دەبێت
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let request = NSFetchRequest<Imported>(entityName: "Imported")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \Imported.date, ascending: false)]
+            request.fetchLimit = 1 // باشترە تەنها نوێترین ئەپ بهێنێت بۆ خێرایی
             
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
                 print("No imported app found")
+                self.isSigning = false
                 return
             }
             
@@ -219,6 +226,8 @@ struct HomeView: View {
                 certificate: selectedCert
             ) { error in
                 DispatchQueue.main.async {
+                    self.isSigning = false // 💡 قفڵەکە دەکرێتەوە
+                    
                     if error == nil {
                         if options.post_deleteAppAfterSigned {
                             Storage.shared.deleteApp(for: importedApp)
