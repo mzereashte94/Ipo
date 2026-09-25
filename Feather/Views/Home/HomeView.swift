@@ -3,7 +3,7 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  100% Pro & Modern UI with Filter Tabs (All, Apps, Games)
+//  100% Pro & Modern UI with Filter Tabs (Fixed JSON Type Filtering)
 //
 
 import SwiftUI
@@ -50,6 +50,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     let name: String
     let version: String?
     let category: String?
+    let type: String? // 💡 ئەمەمان زیاد کرد بۆ خوێندنەوەی type لە JSON
     let iconURL: String?
     let size: String?
     let developerName: String?
@@ -62,7 +63,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
-        case name, version, category, iconURL, size, developerName, bundleIdentifier, download_url
+        case name, version, category, type, iconURL, size, developerName, bundleIdentifier, download_url // 💡 type لێرەش زیاد کرا
         case descriptionText = "description"
     }
 
@@ -97,19 +98,20 @@ struct HomeView: View {
         animation: .snappy
     ) private var _signedApps: FetchedResults<Signed>
     
+    // 💡 لۆژیکی فلتەرکردنەکە گۆڕدرا بۆ ئەوەی پشت بە type ببەستێت ڕێک وەک JSONـەکەت
     private var filteredApps: [AshteHomeAppModel] {
         appsList.filter { app in
             let matchesSearch = searchText.isEmpty || app.name.localizedCaseInsensitiveContains(searchText)
             guard matchesSearch else { return false }
             
-            let categoryName = (app.category ?? "").lowercased()
+            let appType = (app.type ?? "").lowercased()
             switch selectedTab {
             case .all:
                 return true
             case .apps:
-                return !categoryName.contains("game") && !categoryName.contains("لعب")
+                return appType == "apps"
             case .games:
-                return categoryName.contains("game") || categoryName.contains("لعب")
+                return appType == "games"
             }
         }
     }
@@ -381,7 +383,7 @@ struct AshteHomeEmptyView: View {
     }
 }
 
-// MARK: - Sleek App Cell (App Store Style)
+// MARK: - Sleek App Cell
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
@@ -408,7 +410,7 @@ struct AshteHomeAppCell: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text("\(app.category ?? "App") • v\(app.version ?? "1.0")")
+                Text("\(app.type == "games" ? "Game" : "App") • v\(app.version ?? "1.0")")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -592,7 +594,7 @@ struct AshteHomeAppDetailView: View {
                     HStack(spacing: 15) {
                         AshteInfoCard(title: "Version", value: app.version ?? "1.0", icon: "v.circle.fill")
                         AshteInfoCard(title: "Size", value: app.size ?? "N/A", icon: "shippingbox.fill")
-                        AshteInfoCard(title: "Category", value: app.category ?? "App", icon: "square.grid.2x2.fill")
+                        AshteInfoCard(title: "Category", value: app.type == "games" ? "Game" : "App", icon: "square.grid.2x2.fill")
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 15)
