@@ -3,7 +3,7 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  100% Pro & Modern UI - App Store Style
+//  100% Pro & Modern UI with Filter Tabs (All, Apps, Games)
 //
 
 import SwiftUI
@@ -15,10 +15,27 @@ import Combine
 import CoreData
 import AudioToolbox 
 
-// MARK: - Global Lock (پاراستنی سەلامەتی واژووکردن)
+// MARK: - Global Lock
 class HomeGlobalLock {
     static var isSigningActive = false
     static var lastInstallPrompt: Date = .distantPast
+}
+
+// MARK: - Tab Categories
+enum HomeCategoryTab: String, CaseIterable, Identifiable {
+    case all = "All"
+    case apps = "Apps"
+    case games = "Games"
+    
+    var id: String { rawValue }
+    
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .apps: return "Apps"
+        case .games: return "Games"
+        }
+    }
 }
 
 // MARK: - Models
@@ -69,6 +86,7 @@ struct HomeView: View {
     @State private var appsList: [AshteHomeAppModel] = []
     @State private var searchText = ""
     @State private var isLoading = true
+    @State private var selectedTab: HomeCategoryTab = .all
     
     @State private var _selectedInstallAppPresenting: AnyApp?
     @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
@@ -80,7 +98,20 @@ struct HomeView: View {
     ) private var _signedApps: FetchedResults<Signed>
     
     private var filteredApps: [AshteHomeAppModel] {
-        appsList.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
+        appsList.filter { app in
+            let matchesSearch = searchText.isEmpty || app.name.localizedCaseInsensitiveContains(searchText)
+            guard matchesSearch else { return false }
+            
+            let categoryName = (app.category ?? "").lowercased()
+            switch selectedTab {
+            case .all:
+                return true
+            case .apps:
+                return !categoryName.contains("game") && !categoryName.contains("لعب")
+            case .games:
+                return categoryName.contains("game") || categoryName.contains("لعب")
+            }
+        }
     }
     
     @State private var _currentBannerIndex = 0
@@ -100,7 +131,7 @@ struct HomeView: View {
     var body: some View {
         NBNavigationView(.localized("Discover")) {
             ZStack {
-                Color(UIColor.systemGroupedBackground).ignoresSafeArea() // باکگراوندی مۆدێرن
+                Color(UIColor.systemGroupedBackground).ignoresSafeArea()
                 
                 if isLoading && appsList.isEmpty {
                     VStack(spacing: 16) {
@@ -112,7 +143,7 @@ struct HomeView: View {
                     }
                 } else {
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 24) {
+                        VStack(spacing: 20) {
                             
                             // MARK: - Banners Section
                             if searchText.isEmpty {
@@ -135,7 +166,7 @@ struct HomeView: View {
                                                         .overlay(ProgressView())
                                                 }
                                             }
-                                            .frame(height: 210)
+                                            .frame(height: 200)
                                             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                                             .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 5)
                                             .padding(.horizontal, 20)
@@ -144,7 +175,7 @@ struct HomeView: View {
                                         .tag(index)
                                     }
                                 }
-                                .frame(height: 240)
+                                .frame(height: 230)
                                 .tabViewStyle(.page(indexDisplayMode: .always))
                                 .onReceive(bannerTimer) { _ in
                                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
@@ -154,11 +185,46 @@ struct HomeView: View {
                                 .padding(.top, 10)
                             }
                             
+                            // MARK: - Filter Tabs (All, Apps, Games)
+                            HStack(spacing: 10) {
+                                ForEach(HomeCategoryTab.allCases) { tab in
+                                    Button {
+                                        let generator = UIImpactFeedbackGenerator(style: .light)
+                                        generator.impactOccurred()
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                            selectedTab = tab
+                                        }
+                                    } label: {
+                                        Text(tab.title)
+                                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                                            .foregroundColor(selectedTab == tab ? .white : .primary)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 8)
+                                            .background(
+                                                ZStack {
+                                                    if selectedTab == tab {
+                                                        Capsule()
+                                                            .fill(Color.accentColor)
+                                                            .matchedGeometryEffect(id: "activeTabBadge", in: tabAnimation)
+                                                    } else {
+                                                        Capsule()
+                                                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                                                    }
+                                                }
+                                            )
+                                            .shadow(color: selectedTab == tab ? Color.accentColor.opacity(0.3) : .black.opacity(0.03), radius: 5, x: 0, y: 2)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 20)
+                            
                             // MARK: - Apps List Section
                             if !filteredApps.isEmpty {
-                                VStack(spacing: 16) {
+                                VStack(spacing: 14) {
                                     HStack {
-                                        Text(.localized("Featured Apps"))
+                                        Text(selectedTab.title)
                                             .font(.system(.title2, design: .rounded).bold())
                                             .foregroundColor(.primary)
                                         Spacer()
@@ -226,6 +292,8 @@ struct HomeView: View {
             }
         }
     }
+    
+    @Namespace private var tabAnimation
     
     // MARK: - Auto-Sign Logic
     private func handleAutoSign() {
@@ -304,7 +372,7 @@ struct AshteHomeEmptyView: View {
             Text(.localized("No Applications Found"))
                 .font(.system(.headline, design: .rounded))
                 .foregroundColor(.primary)
-            Text(.localized("Try searching for something else."))
+            Text(.localized("Try selecting another category or searching again."))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -421,7 +489,7 @@ struct AshteHomeAppCell: View {
     }
 }
 
-// MARK: - Premium Detail View (App Store Hero Style)
+// MARK: - Premium Detail View
 struct AshteHomeAppDetailView: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
@@ -435,7 +503,6 @@ struct AshteHomeAppDetailView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
-                // Hero Header with Glassmorphism
                 ZStack(alignment: .top) {
                     GeometryReader { proxy in
                         let minY = proxy.frame(in: .global).minY
@@ -452,7 +519,6 @@ struct AshteHomeAppDetailView: View {
                     }
                     .frame(height: 250)
                     
-                    // Glassmorphism Navigation Bar
                     HStack {
                         Button(action: { presentationMode.wrappedValue.dismiss() }) {
                             Image(systemName: "chevron.left")
@@ -474,7 +540,6 @@ struct AshteHomeAppDetailView: View {
                     .padding(.top, UIApplication.shared.windows.first?.safeAreaInsets.top ?? 50)
                 }
                 
-                // App Info Header overlapping the Hero Image
                 VStack(spacing: 16) {
                     AsyncImage(url: app.fullImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -497,7 +562,6 @@ struct AshteHomeAppDetailView: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    // Action Buttons
                     HStack(spacing: 16) {
                         if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                             HStack {
@@ -525,7 +589,6 @@ struct AshteHomeAppDetailView: View {
                     .padding(.horizontal, 30)
                     .padding(.top, 10)
                     
-                    // Info Grid
                     HStack(spacing: 15) {
                         AshteInfoCard(title: "Version", value: app.version ?? "1.0", icon: "v.circle.fill")
                         AshteInfoCard(title: "Size", value: app.size ?? "N/A", icon: "shippingbox.fill")
@@ -534,7 +597,6 @@ struct AshteHomeAppDetailView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 15)
                     
-                    // Description
                     VStack(alignment: .leading, spacing: 12) {
                         Text("About this app")
                             .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -551,7 +613,6 @@ struct AshteHomeAppDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
-                    
                 }
                 .padding(.bottom, 50)
             }
@@ -594,15 +655,11 @@ struct AshteHomeAppDetailView: View {
         }
         downloadProgress = download.overallProgress
         let publisher = Publishers.CombineLatest(download.$progress, download.$unpackageProgress)
-        cancellable = sink(publisher: publisher)
-    }
-    
-    private func sink(publisher: Publishers.CombineLatest<Published<Double>.Publisher, Published<Double>.Publisher>) -> AnyCancellable {
-        publisher.sink { _, _ in downloadProgress = downloadManager.getDownload(by: app.stringID)?.overallProgress ?? 0 }
+        cancellable = publisher.sink { _, _ in downloadProgress = downloadManager.getDownload(by: app.stringID)?.overallProgress ?? 0 }
     }
 }
 
-// MARK: - Modern Info Card for Detail View
+// MARK: - Modern Info Card
 struct AshteInfoCard: View {
     let title: String
     let value: String
