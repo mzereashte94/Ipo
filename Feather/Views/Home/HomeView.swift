@@ -3,6 +3,7 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
+//  Merged custom JSON source with Friend's clean UI & Auto-Scroll Banners
 //
 
 import SwiftUI
@@ -69,11 +70,12 @@ struct SocialBanner: Identifiable {
 
 // MARK: - Main View
 struct HomeView: View {
+    @Environment(\.openURL) var openURL
     @State private var appsList: [AshteHomeAppModel] = []
     @State private var searchText = ""
+    @State private var isLoading = true
     
     @State private var _selectedInstallAppPresenting: AnyApp?
-    
     @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
     
     @FetchRequest(
@@ -86,7 +88,10 @@ struct HomeView: View {
         appsList.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
-    let banners = [
+    @State private var _currentBannerIndex = 0
+    private let bannerTimer = Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()
+    
+    let staticBanners = [
         SocialBanner(
             imageURL: URL(string: "https://ashtemobile.site/img/t.png"),
             destinationURL: URL(string: "https://t.me/ashtemobile")
@@ -99,78 +104,89 @@ struct HomeView: View {
     
     var body: some View {
         NBNavigationView(.localized("Discover")) {
-            ScrollView {
-                VStack(spacing: 0) {
-                    if searchText.isEmpty {
-                        TabView {
-                            ForEach(banners) { banner in
-                                Button(action: {
-                                    if let url = banner.destinationURL {
-                                        UIApplication.shared.open(url)
+            ZStack {
+                if isLoading && appsList.isEmpty {
+                    ProgressView(.localized("Loading..."))
+                } else {
+                    // 💡 بەکارهێنانی List بۆ ئەوەی دیزاینەکە وەک هی هاوڕێکەت لێ بێت
+                    List {
+                        if searchText.isEmpty {
+                            Section {
+                                TabView(selection: $_currentBannerIndex) {
+                                    ForEach(staticBanners.indices, id: \.self) { index in
+                                        let banner = staticBanners[index]
+                                        Button {
+                                            if let url = banner.destinationURL {
+                                                UIApplication.shared.open(url)
+                                            }
+                                        } label: {
+                                            AsyncImage(url: banner.imageURL) { phase in
+                                                if let image = phase.image {
+                                                    image.resizable().aspectRatio(contentMode: .fill)
+                                                } else if phase.error != nil {
+                                                    Rectangle().fill(Color(uiColor: .secondarySystemBackground))
+                                                        .overlay(Image(systemName: "photo.fill").foregroundColor(.secondary))
+                                                } else {
+                                                    Rectangle().fill(Color(uiColor: .secondarySystemBackground))
+                                                        .overlay(ProgressView())
+                                                }
+                                            }
+                                            .frame(height: 200)
+                                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                            .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 3)
+                                            .padding(.horizontal, 16)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .tag(index)
                                     }
-                                }) {
-                                    AsyncImage(url: banner.imageURL) { image in
-                                        image.resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                    } placeholder: {
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .fill(Color(UIColor.secondarySystemBackground))
-                                            .overlay(ProgressView())
+                                }
+                                .frame(height: 230)
+                                .tabViewStyle(.page(indexDisplayMode: .always))
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .onReceive(bannerTimer) { _ in
+                                    withAnimation(.easeInOut(duration: 0.5)) {
+                                        _currentBannerIndex = (_currentBannerIndex + 1) % staticBanners.count
                                     }
-                                    .frame(height: 180)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                    .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 3)
-                                    .padding(.horizontal, 20)
                                 }
                             }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .always))
-                        .frame(height: 210)
-                        .padding(.top, 10)
-                    }
-                    
-                    if !filteredApps.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text(.localized("Recently Updated"))
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                Spacer()
-                                Text("\(filteredApps.count)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                                    .background(Color(UIColor.secondarySystemBackground))
-                                    .clipShape(Capsule())
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 15)
-                            .padding(.bottom, 5)
-                            
-                            LazyVStack(spacing: 0) {
+                        
+                        if !filteredApps.isEmpty {
+                            Section {
                                 ForEach(filteredApps) { app in
                                     NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
                                         AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
-                                            .padding(.horizontal, 20)
-                                            .padding(.vertical, 12)
                                     }
                                     .buttonStyle(.plain)
-                                    
-                                    if app.idNumber != filteredApps.last?.idNumber {
-                                        Divider()
-                                            .padding(.leading, 90)
-                                    }
                                 }
+                            } header: {
+                                HStack(spacing: 6) {
+                                    Text(.localized("Recently Updated"))
+                                        .font(.title3.bold())
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Text("\(filteredApps.count)")
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(Color.accentColor.opacity(0.15))
+                                        .foregroundColor(.accentColor)
+                                        .clipShape(Capsule())
+                                }
+                                .padding(.top, 5)
+                                .textCase(nil)
+                            }
+                        } else if !searchText.isEmpty || !isLoading {
+                            Section {
+                                AshteHomeEmptyView()
                             }
                         }
-                    } else if !searchText.isEmpty {
-                        AshteHomeEmptyView()
-                            .padding(.top, 50)
                     }
+                    .listStyle(.insetGrouped)
                 }
             }
-            .background(Color(UIColor.systemBackground))
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
             .refreshable {
                 await loadRemoteApps()
@@ -186,7 +202,6 @@ struct HomeView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AshteMobile.installApp"))) { _ in
             let now = Date()
-            // 💡 کاتی قفڵەکە دەپشکنین، ئەگەر لە ٢ چرکەی ڕابردوودا داوای نەکردبێت، ئەوا ڕێگەی پێ دەدەین
             if now.timeIntervalSince(HomeGlobalLock.lastInstallPrompt) > 2.0 {
                 HomeGlobalLock.lastInstallPrompt = now
                 
@@ -200,7 +215,6 @@ struct HomeView: View {
     }
     
     private func handleAutoSign() {
-        // 💡 بەکارهێنانی قفڵی گشتی بۆ ڕێگریکردن لە دووبارە واژووکردن
         if HomeGlobalLock.isSigningActive { return }
         HomeGlobalLock.isSigningActive = true
         
@@ -216,7 +230,6 @@ struct HomeView: View {
             
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
-                print("No imported app found")
                 HomeGlobalLock.isSigningActive = false
                 return
             }
@@ -235,7 +248,7 @@ struct HomeView: View {
                 certificate: selectedCert
             ) { error in
                 DispatchQueue.main.async {
-                    HomeGlobalLock.isSigningActive = false // 💡 قفڵەکە دەکرێتەوە دوای تەواوبوون
+                    HomeGlobalLock.isSigningActive = false
                     
                     if error == nil {
                         if options.post_deleteAppAfterSigned {
@@ -251,6 +264,7 @@ struct HomeView: View {
     }
     
     private func loadRemoteApps() async {
+        isLoading = true
         guard let url = URL(string: "https://ashtemobile.site/Ashtemobile.json") else { return }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -259,9 +273,13 @@ struct HomeView: View {
             let decoded = try JSONDecoder().decode(AshteHomeAppResponse.self, from: data)
             DispatchQueue.main.async {
                 self.appsList = decoded.apps
+                self.isLoading = false
             }
         } catch {
             print("Error loading apps: \(error)")
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
         }
     }
 }
@@ -285,10 +303,13 @@ struct AshteHomeEmptyView: View {
                     .foregroundColor(.secondary)
                     .padding(.top, 8)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
         }
     }
 }
 
+// 💡 خانەی ئەپەکان دیزاین کراوە وەک هی هاوڕێکەت (ئایکۆنێکی گەورەتر، دوگمەی داونلۆدی ڕێکخراو)
 struct AshteHomeAppCell: View {
     let app: AshteHomeAppModel
     var onDownloadComplete: () -> Void
@@ -301,29 +322,12 @@ struct AshteHomeAppCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                AsyncImage(url: app.fullImageURL) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Color(UIColor.secondarySystemBackground)
-                }
-                .frame(width: 60, height: 60)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
+                // 💡 بەکارهێنانی FRIconCellView بۆ ئەوەی ڕێک وەک سۆرسەکان خاوێن بێت
+                FRIconCellView(
+                    title: app.name,
+                    subtitle: "\(app.version ?? "1.0") • \(app.category ?? "Apps")",
+                    iconUrl: app.fullImageURL
                 )
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(app.name)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                    
-                    Text("\(app.version ?? "1.0") • \(app.category ?? "Apps")")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
                 
                 Spacer()
                 
@@ -332,25 +336,28 @@ struct AshteHomeAppCell: View {
                         ZStack {
                             Circle()
                                 .trim(from: 0, to: downloadProgress)
-                                .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.3, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
-                                .frame(width: 30, height: 30)
+                                .frame(width: 31, height: 31)
                                 .animation(.smooth, value: downloadProgress)
 
-                            Image(systemName: "stop.fill")
-                                .foregroundStyle(.blue)
-                                .font(.system(size: 10, weight: .black))
+                            Image(systemName: downloadProgress >= 0.75 ? "archivebox" : "square.fill")
+                                .foregroundStyle(.tint)
+                                .font(.footnote.weight(.bold))
                         }
                         .onTapGesture {
-                            downloadManager.cancelDownload(currentDownload)
+                            if downloadProgress <= 0.75 {
+                                downloadManager.cancelDownload(currentDownload)
+                            }
                         }
                     } else {
                         Button(action: { triggerDownload() }) {
-                            Text("Get")
-                                .font(.system(size: 15, weight: .bold))
-                                .frame(width: 72, height: 32)
-                                .background(Color.blue.opacity(0.1))
-                                .foregroundColor(.blue)
+                            Text(.localized("Get"))
+                                .font(.headline.weight(.bold))
+                                .foregroundColor(Color.accentColor)
+                                .padding(.horizontal, 22)
+                                .padding(.vertical, 6)
+                                .background(Color(uiColor: .tertiarySystemFill))
                                 .clipShape(Capsule())
                         }
                     }
@@ -489,11 +496,11 @@ struct AshteHomeAppDetailView: View {
                     ZStack {
                         if let currentDownload = downloadManager.getDownload(by: app.stringID) {
                             ZStack {
-                                Capsule().fill(Color.blue.opacity(0.1))
+                                Capsule().fill(Color.accentColor.opacity(0.1))
                                 HStack {
                                     Text("Downloading...")
                                         .font(.system(size: 16, weight: .bold, design: .rounded))
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(.accentColor)
                                     Spacer()
                                     ProgressView()
                                 }
@@ -502,11 +509,11 @@ struct AshteHomeAppDetailView: View {
                             .frame(maxWidth: .infinity, minHeight: 44)
                         } else {
                             Button(action: { triggerDownload() }) {
-                                Text(isDownloading ? "..." : "Get")
+                                Text(isDownloading ? "..." : .localized("Get"))
                                     .font(.system(size: 16, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity, minHeight: 44)
-                                    .background(Color.blue)
+                                    .background(Color.accentColor)
                                     .clipShape(Capsule())
                             }
                         }
@@ -517,7 +524,7 @@ struct AshteHomeAppDetailView: View {
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(Color.blue)
+                            .background(Color.accentColor)
                             .clipShape(Capsule())
                     }
                 }
@@ -626,14 +633,14 @@ struct AshtePillView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.blue)
+                .foregroundColor(.accentColor)
             Text(text)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(Color.blue.opacity(0.1))
+        .background(Color.accentColor.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
