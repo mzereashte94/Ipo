@@ -3,7 +3,7 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  100% Pro UI with Filter Tabs & Fixed Double Install
+//  100% Clean Pro UI with Global Notification Trigger ⚡️
 //
 
 import SwiftUI
@@ -13,7 +13,6 @@ import Foundation
 import UIKit
 import Combine
 import CoreData
-import AudioToolbox 
 
 // MARK: - Global Lock
 class HomeGlobalLock {
@@ -142,7 +141,6 @@ struct HomeView: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 20) {
                             
-                            // MARK: - Banners Section
                             if searchText.isEmpty {
                                 TabView(selection: $_currentBannerIndex) {
                                     ForEach(staticBanners.indices, id: \.self) { index in
@@ -182,7 +180,6 @@ struct HomeView: View {
                                 .padding(.top, 10)
                             }
                             
-                            // MARK: - Filter Tabs
                             HStack(spacing: 10) {
                                 ForEach(HomeCategoryTab.allCases) { tab in
                                     Button {
@@ -217,7 +214,6 @@ struct HomeView: View {
                             }
                             .padding(.horizontal, 20)
                             
-                            // MARK: - Apps List
                             if !filteredApps.isEmpty {
                                 VStack(spacing: 14) {
                                     HStack {
@@ -237,8 +233,8 @@ struct HomeView: View {
                                     
                                     VStack(spacing: 0) {
                                         ForEach(filteredApps) { app in
-                                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: { handleAutoSign() })) {
-                                                AshteHomeAppCell(app: app, onDownloadComplete: { handleAutoSign() })
+                                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: { handleAutoSign(for: app) })) {
+                                                AshteHomeAppCell(app: app, onDownloadComplete: { handleAutoSign(for: app) })
                                                     .padding(.horizontal, 20)
                                                     .padding(.vertical, 14)
                                                     .background(Color(UIColor.secondarySystemGroupedBackground))
@@ -295,8 +291,7 @@ struct HomeView: View {
     
     @Namespace private var tabAnimation
     
-    // MARK: - Auto-Sign Logic
-    private func handleAutoSign() {
+    private func handleAutoSign(for app: AshteHomeAppModel) {
         if HomeGlobalLock.isSigningActive { return }
         HomeGlobalLock.isSigningActive = true
         
@@ -335,6 +330,9 @@ struct HomeView: View {
                         if options.post_deleteAppAfterSigned {
                             Storage.shared.deleteApp(for: importedApp)
                         }
+                        
+                        // 💡 لێرەدا فەرمان دەنێرین بۆ فایلە سەرەکییەکە کە زەنگەکە لێبدات!
+                        NotificationCenter.default.post(name: Notification.Name("AshteMobile.ShowSignSuccess"), object: app.name)
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
                     } else {
                         print("Signing Error: \(String(describing: error))")
@@ -389,7 +387,6 @@ struct AshteHomeAppCell: View {
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
     @State private var cancellable: AnyCancellable?
-    @State private var isDownloading = false
 
     var body: some View {
         HStack(spacing: 16) {
@@ -453,18 +450,10 @@ struct AshteHomeAppCell: View {
         .onDisappear { cancellable?.cancel() }
         .onChange(of: downloadManager.downloads.count) { _ in
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
-            
             if isCurrentlyDownloading {
-                isDownloading = true
                 setupObserver()
-            } else if isDownloading && !isCurrentlyDownloading {
-                isDownloading = false
-                if downloadProgress >= 0.98 {
-                    AudioServicesPlaySystemSound(1300)
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                    onDownloadComplete()
-                }
+            } else if downloadProgress >= 0.98 {
+                onDownloadComplete()
             }
         }
     }
@@ -498,7 +487,6 @@ struct AshteHomeAppDetailView: View {
     @ObservedObject private var downloadManager = DownloadManager.shared
     @State private var downloadProgress: Double = 0
     @State private var cancellable: AnyCancellable?
-    @State private var isDownloading = false
     
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -576,7 +564,7 @@ struct AshteHomeAppDetailView: View {
                             .clipShape(Capsule())
                         } else {
                             Button(action: { triggerDownload() }) {
-                                Text(isDownloading ? "..." : .localized("Get"))
+                                Text(.localized("Get"))
                                     .font(.system(size: 17, weight: .bold, design: .rounded))
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -625,16 +613,9 @@ struct AshteHomeAppDetailView: View {
         .onChange(of: downloadManager.downloads.count) { _ in
             let isCurrentlyDownloading = downloadManager.getDownload(by: app.stringID) != nil
             if isCurrentlyDownloading {
-                isDownloading = true
                 setupObserver()
-            } else if isDownloading && !isCurrentlyDownloading {
-                isDownloading = false
-                if downloadProgress >= 0.98 {
-                    AudioServicesPlaySystemSound(1300)
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                    onDownloadComplete()
-                }
+            } else if downloadProgress >= 0.98 {
+                onDownloadComplete()
             }
         }
     }
