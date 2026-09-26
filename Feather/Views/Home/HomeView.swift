@@ -3,7 +3,7 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  100% Pro UI with Filter Tabs, Fixed Double Install & Custom Success Banner ⚡️
+//  100% Pro UI with Filter Tabs, Fixed Double Install & "Please wait" Banner ⚡️
 //
 
 import SwiftUI
@@ -91,9 +91,8 @@ struct HomeView: View {
     @State private var _selectedInstallAppPresenting: AnyApp?
     @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
     
-    // 💡 گۆڕاوەکان بۆ نۆتیفیکەیشنی سەرکەوتنی ئینستاڵ (Banner)
+    // 💡 گۆڕاوەکان بۆ نۆتیفیکەیشنی چاوەڕوانی (Please wait...)
     @State private var showSuccessBanner = false
-    @State private var bannerAppModel: AshteHomeAppModel? = nil
     
     @FetchRequest(
         entity: Signed.entity(),
@@ -241,8 +240,8 @@ struct HomeView: View {
                                     
                                     VStack(spacing: 0) {
                                         ForEach(filteredApps) { app in
-                                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: { handleAutoSign(for: app) })) {
-                                                AshteHomeAppCell(app: app, onDownloadComplete: { handleAutoSign(for: app) })
+                                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: { handleAutoSign() })) {
+                                                AshteHomeAppCell(app: app, onDownloadComplete: { handleAutoSign() })
                                                     .padding(.horizontal, 20)
                                                     .padding(.vertical, 14)
                                                     .background(Color(UIColor.secondarySystemGroupedBackground))
@@ -268,10 +267,10 @@ struct HomeView: View {
                     }
                 }
             }
-            // 💡 دانانی نۆتیفیکەیشنی Banner بە شێوەی Overlay لە سەرەوە
+            // 💡 نیشاندانی نامەی (Please wait for install...) لە کاتی واژووکردندا
             .overlay(alignment: .top) {
-                if showSuccessBanner, let bannerApp = bannerAppModel {
-                    AshteSuccessBanner(app: bannerApp)
+                if showSuccessBanner {
+                    AshteSuccessBanner()
                         .transition(.move(edge: .top).combined(with: .opacity))
                         .zIndex(100)
                 }
@@ -307,13 +306,19 @@ struct HomeView: View {
     
     @Namespace private var tabAnimation
     
-    // MARK: - Auto-Sign Logic with Banner Trigger
-    private func handleAutoSign(for app: AshteHomeAppModel) {
+    // MARK: - Auto-Sign Logic with "Please wait" Banner
+    private func handleAutoSign() {
         if HomeGlobalLock.isSigningActive { return }
         HomeGlobalLock.isSigningActive = true
         
+        // 💡 هەرکە گەیشتە ١٠٠٪، ئەم نامەیە دێتە سەر شاشەکە
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+            self.showSuccessBanner = true
+        }
+        
         if installationMethod == 1 {
             HomeGlobalLock.isSigningActive = false
+            self.showSuccessBanner = false
             return
         }
         
@@ -325,6 +330,7 @@ struct HomeView: View {
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
                 HomeGlobalLock.isSigningActive = false
+                self.showSuccessBanner = false
                 return
             }
             
@@ -343,24 +349,16 @@ struct HomeView: View {
             ) { error in
                 DispatchQueue.main.async {
                     HomeGlobalLock.isSigningActive = false
+                    
+                    // 💡 کاتێک واژووکردن تەواو بوو، نامەکە لا دەبەین بۆ ئەوەی پەنجەرەی ئینستاڵ دەربکەوێت
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                        self.showSuccessBanner = false
+                    }
+                    
                     if error == nil {
                         if options.post_deleteAppAfterSigned {
                             Storage.shared.deleteApp(for: importedApp)
                         }
-                        
-                        // 💡 پیشاندانی نۆتیفیکەیشنەکە
-                        self.bannerAppModel = app
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                            self.showSuccessBanner = true
-                        }
-                        
-                        // 💡 شاردنەوەی نۆتیفیکەیشنەکە دوای ٤ چرکە
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                                self.showSuccessBanner = false
-                            }
-                        }
-                        
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
                     } else {
                         print("Signing Error: \(String(describing: error))")
@@ -388,52 +386,24 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Banner Notification View (دیزاینە نوێیەکە بۆ نۆتیفیکەیشن)
+// MARK: - Banner Notification View (دیزاینە خاوێنەکەی داوات کرد)
 struct AshteSuccessBanner: View {
-    let app: AshteHomeAppModel
-    
     var body: some View {
         HStack(spacing: 12) {
-            // 💡 لۆگۆی خۆت لە لای چەپ (لۆگۆی AshteMobile دەهێنێت لە سێرڤەرەکەتەوە)
-            AsyncImage(url: URL(string: "https://ashtemobile.site/logo.png")) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Color.black
-            }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                .scaleEffect(0.9)
             
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text("Signing Complete")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Text("now")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(.secondary)
-                }
-                Text("\(app.name) has been signed successfully on the server")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-            
-            // 💡 لۆگۆی بەرنامەکە/یارییەکە لە لای ڕاست
-            AsyncImage(url: app.fullImageURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Color.gray.opacity(0.3)
-            }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text("Please wait for install...")
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
         }
-        .padding(14)
-        .background(.ultraThickMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
-        .padding(.horizontal, 16)
-        .padding(.top, UIApplication.shared.windows.first?.safeAreaInsets.top ?? 20)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(Color.accentColor)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
+        .padding(.top, UIApplication.shared.windows.first?.safeAreaInsets.top ?? 15)
     }
 }
 
