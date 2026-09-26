@@ -3,7 +3,7 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  100% Pro & Modern UI with Filter Tabs (Fixed JSON Type Filtering)
+//  100% Pro UI with Filter Tabs & Fixed Double Install
 //
 
 import SwiftUI
@@ -18,7 +18,6 @@ import AudioToolbox
 // MARK: - Global Lock
 class HomeGlobalLock {
     static var isSigningActive = false
-    static var lastInstallPrompt: Date = .distantPast
 }
 
 // MARK: - Tab Categories
@@ -50,7 +49,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     let name: String
     let version: String?
     let category: String?
-    let type: String? // 💡 ئەمەمان زیاد کرد بۆ خوێندنەوەی type لە JSON
+    let type: String? 
     let iconURL: String?
     let size: String?
     let developerName: String?
@@ -63,7 +62,7 @@ struct AshteHomeAppModel: Codable, Identifiable {
     
     enum CodingKeys: String, CodingKey {
         case idNumber = "id"
-        case name, version, category, type, iconURL, size, developerName, bundleIdentifier, download_url // 💡 type لێرەش زیاد کرا
+        case name, version, category, type, iconURL, size, developerName, bundleIdentifier, download_url
         case descriptionText = "description"
     }
 
@@ -98,7 +97,6 @@ struct HomeView: View {
         animation: .snappy
     ) private var _signedApps: FetchedResults<Signed>
     
-    // 💡 لۆژیکی فلتەرکردنەکە گۆڕدرا بۆ ئەوەی پشت بە type ببەستێت ڕێک وەک JSONـەکەت
     private var filteredApps: [AshteHomeAppModel] {
         appsList.filter { app in
             let matchesSearch = searchText.isEmpty || app.name.localizedCaseInsensitiveContains(searchText)
@@ -187,7 +185,7 @@ struct HomeView: View {
                                 .padding(.top, 10)
                             }
                             
-                            // MARK: - Filter Tabs (All, Apps, Games)
+                            // MARK: - Filter Tabs
                             HStack(spacing: 10) {
                                 ForEach(HomeCategoryTab.allCases) { tab in
                                     Button {
@@ -222,7 +220,7 @@ struct HomeView: View {
                             }
                             .padding(.horizontal, 20)
                             
-                            // MARK: - Apps List Section
+                            // MARK: - Apps List
                             if !filteredApps.isEmpty {
                                 VStack(spacing: 14) {
                                     HStack {
@@ -282,10 +280,14 @@ struct HomeView: View {
                 .presentationDetents([.height(200)])
                 .presentationDragIndicator(.visible)
         }
+        // 💡 قفڵی گشتی بە UserDefaults بۆ بەشی Homeیش
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AshteMobile.installApp"))) { _ in
-            let now = Date()
-            if now.timeIntervalSince(HomeGlobalLock.lastInstallPrompt) > 2.0 {
-                HomeGlobalLock.lastInstallPrompt = now
+            let now = Date().timeIntervalSince1970
+            let lastTime = UserDefaults.standard.double(forKey: "AshteMobile.GlobalInstallLock")
+            
+            if now - lastTime > 2.0 {
+                UserDefaults.standard.set(now, forKey: "AshteMobile.GlobalInstallLock")
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     if let signedApp = _signedApps.first {
                         _selectedInstallAppPresenting = AnyApp(base: signedApp)
