@@ -3,6 +3,7 @@
 //  AshteMobile
 //
 //  Created by samara on 22.04.2025.
+//  Modified for AshteMobile - Global Success Notification Trigger ⚡️
 //
 
 import Foundation.NSURL
@@ -56,6 +57,9 @@ enum FR {
 				try await handler.modify()
 				try? await handler.clean()
 				await MainActor.run {
+                    // 💡 فەرمانی لێدانی زەنگەکە لێرەوە دەنێرین بۆ هەموو بەرنامەکە (Home, Library, Sources)
+                    NotificationCenter.default.post(name: Notification.Name("AshteMobile.ShowSignSuccess"), object: app.name)
+                    
 					completion(nil)
 				}
 			} catch {
