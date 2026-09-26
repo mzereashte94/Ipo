@@ -1,5 +1,5 @@
 //
-//  ContentView.swift
+//  LibraryView.swift
 //  AshteMobile
 //
 //  Created by samara on 10.04.2025.
@@ -10,11 +10,6 @@ import SwiftUI
 import CoreData
 import NimbleViews
 
-// MARK: - Global Lock بۆ ڕێگریکردن لە دوو جار ئینستاڵ
-class LibraryGlobalLock {
-    static var lastInstallPrompt: Date = .distantPast
-}
-
 // MARK: - View
 struct LibraryView: View {
     @StateObject var downloadManager = DownloadManager.shared
@@ -24,9 +19,8 @@ struct LibraryView: View {
     @State private var _selectedInstallAppPresenting: AnyApp?
     @State private var _isImportingPresenting = false
     @State private var _isDownloadingPresenting = false
-    @State private var _alertDownloadString: String = "" // for _isDownloadingPresenting
+    @State private var _alertDownloadString: String = "" 
     
-    // گۆڕاوێکی نوێ بۆ نیشاندانی دیزاینە نوێیەکە
     @State private var _showModernImportSheet = false
     
     // MARK: Selection State
@@ -71,7 +65,6 @@ struct LibraryView: View {
     var body: some View {
         NBNavigationView(.localized("Library")) {
             List {
-                // MARK: - Modern Dashboard Cards
                 if !_editMode.isEditing && _searchText.isEmpty {
                     Section {
                         HStack(spacing: 15) {
@@ -95,7 +88,6 @@ struct LibraryView: View {
                     }
                 }
                 
-                // MARK: - Signed Apps Section
                 if !_filteredSignedApps.isEmpty, _selectedScope == .all || _selectedScope == .signed {
                     NBSection(.localized("Signed Apps"), secondary: _filteredSignedApps.count.description) {
                         ForEach(_filteredSignedApps, id: \.uuid) { app in
@@ -111,7 +103,6 @@ struct LibraryView: View {
                     }
                 }
                 
-                // MARK: - Imported Apps Section
                 if !_filteredImportedApps.isEmpty, _selectedScope == .all || _selectedScope == .imported {
                     NBSection(.localized("Imported Apps"), secondary: _filteredImportedApps.count.description) {
                         ForEach(_filteredImportedApps, id: \.uuid) { app in
@@ -136,7 +127,6 @@ struct LibraryView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .overlay {
-                // MARK: - Modern Empty State
                 if _filteredSignedApps.isEmpty && _filteredImportedApps.isEmpty {
                     VStack(spacing: 18) {
                         Image(systemName: "square.stack.3d.up.badge.a.fill")
@@ -212,7 +202,6 @@ struct LibraryView: View {
                 SigningView(app: app.base)
                     .compatNavigationTransition(id: app.base.uuid ?? "", ns: _namespace)
             }
-            // MARK: - Modern Import Menu Sheet
             .sheet(isPresented: $_showModernImportSheet) {
                 VStack(spacing: 20) {
                     Capsule()
@@ -334,11 +323,13 @@ struct LibraryView: View {
                     }
                 }
             }
-            // 💡 زیادکردنی قفڵی گشتی بۆ ڕێگریکردن لە دوو جار کردنەوەی پەنجەرەی ئینستاڵ
+            // 💡 قفڵی گشتی بە UserDefaults
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AshteMobile.installApp"))) { _ in
-                let now = Date()
-                if now.timeIntervalSince(LibraryGlobalLock.lastInstallPrompt) > 2.0 {
-                    LibraryGlobalLock.lastInstallPrompt = now
+                let now = Date().timeIntervalSince1970
+                let lastTime = UserDefaults.standard.double(forKey: "AshteMobile.GlobalInstallLock")
+                
+                if now - lastTime > 2.0 {
+                    UserDefaults.standard.set(now, forKey: "AshteMobile.GlobalInstallLock")
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         if let latest = _signedApps.first {
