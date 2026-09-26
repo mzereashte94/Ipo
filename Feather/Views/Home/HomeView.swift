@@ -3,7 +3,7 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  100% Pro UI with Filter Tabs & Fixed Double Install
+//  100% Pro UI with Filter Tabs, Fixed Double Install & Custom Success Banner ⚡️
 //
 
 import SwiftUI
@@ -91,6 +91,10 @@ struct HomeView: View {
     @State private var _selectedInstallAppPresenting: AnyApp?
     @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
     
+    // 💡 گۆڕاوەکان بۆ نۆتیفیکەیشنی سەرکەوتنی ئینستاڵ (Banner)
+    @State private var showSuccessBanner = false
+    @State private var bannerAppModel: AshteHomeAppModel? = nil
+    
     @FetchRequest(
         entity: Signed.entity(),
         sortDescriptors: [NSSortDescriptor(keyPath: \Signed.date, ascending: false)],
@@ -104,12 +108,9 @@ struct HomeView: View {
             
             let appType = (app.type ?? "").lowercased()
             switch selectedTab {
-            case .all:
-                return true
-            case .apps:
-                return appType == "apps"
-            case .games:
-                return appType == "games"
+            case .all: return true
+            case .apps: return appType == "apps"
+            case .games: return appType == "games"
             }
         }
     }
@@ -240,8 +241,8 @@ struct HomeView: View {
                                     
                                     VStack(spacing: 0) {
                                         ForEach(filteredApps) { app in
-                                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: handleAutoSign)) {
-                                                AshteHomeAppCell(app: app, onDownloadComplete: handleAutoSign)
+                                            NavigationLink(destination: AshteHomeAppDetailView(app: app, onDownloadComplete: { handleAutoSign(for: app) })) {
+                                                AshteHomeAppCell(app: app, onDownloadComplete: { handleAutoSign(for: app) })
                                                     .padding(.horizontal, 20)
                                                     .padding(.vertical, 14)
                                                     .background(Color(UIColor.secondarySystemGroupedBackground))
@@ -267,6 +268,14 @@ struct HomeView: View {
                     }
                 }
             }
+            // 💡 دانانی نۆتیفیکەیشنی Banner بە شێوەی Overlay لە سەرەوە
+            .overlay(alignment: .top) {
+                if showSuccessBanner, let bannerApp = bannerAppModel {
+                    AshteSuccessBanner(app: bannerApp)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(100)
+                }
+            }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: .localized("Search apps..."))
             .refreshable {
                 await loadRemoteApps()
@@ -280,7 +289,6 @@ struct HomeView: View {
                 .presentationDetents([.height(200)])
                 .presentationDragIndicator(.visible)
         }
-        // 💡 قفڵی گشتی بە UserDefaults بۆ بەشی Homeیش
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AshteMobile.installApp"))) { _ in
             let now = Date().timeIntervalSince1970
             let lastTime = UserDefaults.standard.double(forKey: "AshteMobile.GlobalInstallLock")
@@ -299,8 +307,8 @@ struct HomeView: View {
     
     @Namespace private var tabAnimation
     
-    // MARK: - Auto-Sign Logic
-    private func handleAutoSign() {
+    // MARK: - Auto-Sign Logic with Banner Trigger
+    private func handleAutoSign(for app: AshteHomeAppModel) {
         if HomeGlobalLock.isSigningActive { return }
         HomeGlobalLock.isSigningActive = true
         
@@ -339,6 +347,20 @@ struct HomeView: View {
                         if options.post_deleteAppAfterSigned {
                             Storage.shared.deleteApp(for: importedApp)
                         }
+                        
+                        // 💡 پیشاندانی نۆتیفیکەیشنەکە
+                        self.bannerAppModel = app
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                            self.showSuccessBanner = true
+                        }
+                        
+                        // 💡 شاردنەوەی نۆتیفیکەیشنەکە دوای ٤ چرکە
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                                self.showSuccessBanner = false
+                            }
+                        }
+                        
                         NotificationCenter.default.post(name: Notification.Name("AshteMobile.installApp"), object: nil)
                     } else {
                         print("Signing Error: \(String(describing: error))")
@@ -363,6 +385,55 @@ struct HomeView: View {
         } catch {
             DispatchQueue.main.async { self.isLoading = false }
         }
+    }
+}
+
+// MARK: - Banner Notification View (دیزاینە نوێیەکە بۆ نۆتیفیکەیشن)
+struct AshteSuccessBanner: View {
+    let app: AshteHomeAppModel
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // 💡 لۆگۆی خۆت لە لای چەپ (لۆگۆی AshteMobile دەهێنێت لە سێرڤەرەکەتەوە)
+            AsyncImage(url: URL(string: "https://ashtemobile.site/logo.png")) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Color.black
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("Signing Complete")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text("now")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(.secondary)
+                }
+                Text("\(app.name) has been signed successfully on the server")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+            
+            // 💡 لۆگۆی بەرنامەکە/یارییەکە لە لای ڕاست
+            AsyncImage(url: app.fullImageURL) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Color.gray.opacity(0.3)
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .padding(14)
+        .background(.ultraThickMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+        .padding(.horizontal, 16)
+        .padding(.top, UIApplication.shared.windows.first?.safeAreaInsets.top ?? 20)
     }
 }
 
