@@ -3,7 +3,7 @@
 //  AshteMobile
 //
 //  Created for AshteMobile
-//  100% Pro UI with Filter Tabs, Fixed Double Install & "Please wait" Banner ⚡️
+//  100% Pro UI with Filter Tabs & Fixed Double Install
 //
 
 import SwiftUI
@@ -90,9 +90,6 @@ struct HomeView: View {
     
     @State private var _selectedInstallAppPresenting: AnyApp?
     @AppStorage("AshteMobile.installationMethod") private var installationMethod: Int = 0
-    
-    // 💡 گۆڕاوەکان بۆ نۆتیفیکەیشنی چاوەڕوانی (Please wait...)
-    @State private var showSuccessBanner = false
     
     @FetchRequest(
         entity: Signed.entity(),
@@ -267,14 +264,6 @@ struct HomeView: View {
                     }
                 }
             }
-            // 💡 نیشاندانی نامەی (Please wait for install...) لە کاتی واژووکردندا
-            .overlay(alignment: .top) {
-                if showSuccessBanner {
-                    AshteSuccessBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .zIndex(100)
-                }
-            }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: .localized("Search apps..."))
             .refreshable {
                 await loadRemoteApps()
@@ -306,19 +295,13 @@ struct HomeView: View {
     
     @Namespace private var tabAnimation
     
-    // MARK: - Auto-Sign Logic with "Please wait" Banner
+    // MARK: - Auto-Sign Logic
     private func handleAutoSign() {
         if HomeGlobalLock.isSigningActive { return }
         HomeGlobalLock.isSigningActive = true
         
-        // 💡 هەرکە گەیشتە ١٠٠٪، ئەم نامەیە دێتە سەر شاشەکە
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-            self.showSuccessBanner = true
-        }
-        
         if installationMethod == 1 {
             HomeGlobalLock.isSigningActive = false
-            self.showSuccessBanner = false
             return
         }
         
@@ -330,7 +313,6 @@ struct HomeView: View {
             guard let importedApps = try? Storage.shared.context.fetch(request),
                   let importedApp = importedApps.first else {
                 HomeGlobalLock.isSigningActive = false
-                self.showSuccessBanner = false
                 return
             }
             
@@ -349,12 +331,6 @@ struct HomeView: View {
             ) { error in
                 DispatchQueue.main.async {
                     HomeGlobalLock.isSigningActive = false
-                    
-                    // 💡 کاتێک واژووکردن تەواو بوو، نامەکە لا دەبەین بۆ ئەوەی پەنجەرەی ئینستاڵ دەربکەوێت
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                        self.showSuccessBanner = false
-                    }
-                    
                     if error == nil {
                         if options.post_deleteAppAfterSigned {
                             Storage.shared.deleteApp(for: importedApp)
@@ -383,27 +359,6 @@ struct HomeView: View {
         } catch {
             DispatchQueue.main.async { self.isLoading = false }
         }
-    }
-}
-
-// MARK: - Banner Notification View (دیزاینە خاوێنەکەی داوات کرد)
-struct AshteSuccessBanner: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                .scaleEffect(0.9)
-            
-            Text("Please wait for install...")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 14)
-        .background(Color.accentColor)
-        .clipShape(Capsule())
-        .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
-        .padding(.top, UIApplication.shared.windows.first?.safeAreaInsets.top ?? 15)
     }
 }
 
