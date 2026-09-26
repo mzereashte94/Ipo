@@ -3,12 +3,17 @@
 //  AshteMobile
 //
 //  Created by samara on 10.04.2025.
-//  Modernized UI Design
+//  Modernized UI Design & Fixed Double Install Prompt
 //
 
 import SwiftUI
 import CoreData
 import NimbleViews
+
+// MARK: - Global Lock بۆ ڕێگریکردن لە دوو جار ئینستاڵ
+class LibraryGlobalLock {
+    static var lastInstallPrompt: Date = .distantPast
+}
 
 // MARK: - View
 struct LibraryView: View {
@@ -149,7 +154,6 @@ struct LibraryView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 30)
                         
-                        // گۆڕینی Menu کۆنەکە بۆ دوگمەیەکی مۆدێرن کە پەنجەرە نوێیەکە دەکاتەوە
                         Button(action: {
                             _showModernImportSheet = true
                         }) {
@@ -185,7 +189,6 @@ struct LibraryView: View {
                         _bulkDeleteSelectedApps()
                     }
                 } else {
-                    // گۆڕینی Menuیەکەی سەرەوەش بۆ هەمان پەنجەرەی مۆدێرن
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(action: {
                             _showModernImportSheet = true
@@ -223,7 +226,6 @@ struct LibraryView: View {
                         .padding(.horizontal, 20)
                     
                     VStack(spacing: 16) {
-                        // کارتی یەکەم بۆ Import from URL
                         Button(action: {
                             _showModernImportSheet = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -260,7 +262,6 @@ struct LibraryView: View {
                         }
                         .buttonStyle(.plain)
                         
-                        // کارتی دووەم بۆ Import from Files
                         Button(action: {
                             _showModernImportSheet = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -333,9 +334,17 @@ struct LibraryView: View {
                     }
                 }
             }
+            // 💡 زیادکردنی قفڵی گشتی بۆ ڕێگریکردن لە دوو جار کردنەوەی پەنجەرەی ئینستاڵ
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AshteMobile.installApp"))) { _ in
-                if let latest = _signedApps.first {
-                    _selectedInstallAppPresenting = AnyApp(base: latest)
+                let now = Date()
+                if now.timeIntervalSince(LibraryGlobalLock.lastInstallPrompt) > 2.0 {
+                    LibraryGlobalLock.lastInstallPrompt = now
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        if let latest = _signedApps.first {
+                            _selectedInstallAppPresenting = AnyApp(base: latest)
+                        }
+                    }
                 }
             }
             .onChange(of: _editMode) { mode in
